@@ -74,7 +74,7 @@ export function DashboardView({ activeOrg }: Props) {
         {activityLoading ? (
           <SkeletonBlock lines={2} />
         ) : activity && activity.weekly.length > 0 ? (
-          <div style={{ border: "1px solid #e8e6de", borderRadius: "10px", padding: "11px 13px", background: "#fff" }}>
+          <div style={{ border: "1px solid #374151", borderRadius: "10px", padding: "11px 13px", background: "#1f2937" }}>
             <MomentumGraph weeks={activity.weekly} />
           </div>
         ) : null}
@@ -83,7 +83,7 @@ export function DashboardView({ activeOrg }: Props) {
       {/* Progress mini-graph cards */}
       {!activityLoading && activity && (
         <section>
-          <div style={{ fontSize: "9px", color: "#aaa", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+          <div style={{ fontSize: "9px", color: "#6b7280", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
             progress · click to explore
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
@@ -226,10 +226,10 @@ function MiniGraphCard({
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        border: `1px solid ${hov ? "#534AB7" : "#e8e6de"}`,
+        border: `1px solid ${hov ? "#534AB7" : "#374151"}`,
         borderRadius: "10px",
         padding: "12px",
-        background: "#fff",
+        background: "#1f2937",
         cursor: "pointer",
         transition: "border-color 0.15s",
         flex: 1,
@@ -238,19 +238,19 @@ function MiniGraphCard({
     >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "8px" }}>
         <div>
-          <div style={{ fontSize: "9px", color: "#aaa", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px" }}>
+          <div style={{ fontSize: "9px", color: "#6b7280", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px" }}>
             {title}
           </div>
-          <div style={{ fontSize: "8px", color: "#ccc", fontFamily: "monospace" }}>{sub}</div>
+          <div style={{ fontSize: "8px", color: "#4b5563", fontFamily: "monospace" }}>{sub}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: "#1a1a18", fontFamily: "monospace", lineHeight: 1 }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#e5e7eb", fontFamily: "monospace", lineHeight: 1 }}>
               {total}
             </div>
-            <div style={{ fontSize: "7px", color: "#bbb" }}>entries</div>
+            <div style={{ fontSize: "7px", color: "#6b7280" }}>entries</div>
           </div>
-          <span style={{ color: hov ? "#534AB7" : "#ddd" }}>→</span>
+          <span style={{ color: hov ? "#534AB7" : "#4b5563" }}>→</span>
         </div>
       </div>
       <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>{children}</div>
@@ -313,7 +313,7 @@ function DrillView({
             alignItems: "center",
             gap: "3px",
             fontSize: "11px",
-            color: "#aaa",
+            color: "#6b7280",
             background: "none",
             border: "none",
             cursor: "pointer",
@@ -323,11 +323,11 @@ function DrillView({
         >
           ← dashboard
         </button>
-        <span style={{ color: "#e8e6de" }}>·</span>
-        <span style={{ fontSize: "11px", fontWeight: 600, color: "#1a1a18", fontFamily: "monospace" }}>
+        <span style={{ color: "#374151" }}>·</span>
+        <span style={{ fontSize: "11px", fontWeight: 600, color: "#e5e7eb", fontFamily: "monospace" }}>
           {cfg.title}
         </span>
-        <span style={{ fontSize: "10px", color: "#bbb", fontFamily: "monospace" }}>{cfg.sub}</span>
+        <span style={{ fontSize: "10px", color: "#6b7280", fontFamily: "monospace" }}>{cfg.sub}</span>
       </div>
 
       {/* Stats grid */}
@@ -336,24 +336,24 @@ function DrillView({
           <div
             key={label}
             style={{
-              border: "1px solid #e8e6de",
+              border: "1px solid #374151",
               borderRadius: "8px",
               padding: "10px",
-              background: "#fff",
+              background: "#1f2937",
               textAlign: "center",
             }}
           >
-            <div style={{ fontSize: "20px", fontWeight: 700, color: "#1a1a18", fontFamily: "monospace", lineHeight: 1 }}>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#e5e7eb", fontFamily: "monospace", lineHeight: 1 }}>
               {val}
             </div>
-            <div style={{ fontSize: "9px", color: "#bbb", marginTop: "3px" }}>{label}</div>
+            <div style={{ fontSize: "9px", color: "#6b7280", marginTop: "3px" }}>{label}</div>
           </div>
         ))}
       </div>
 
       {/* Full-size graph */}
-      <div style={{ border: "1px solid #e8e6de", borderRadius: "10px", padding: "14px 16px", background: "#fff" }}>
-        <div style={{ fontSize: "9px", color: "#aaa", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "10px" }}>
+      <div style={{ border: "1px solid #374151", borderRadius: "10px", padding: "14px 16px", background: "#1f2937" }}>
+        <div style={{ fontSize: "9px", color: "#6b7280", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "10px" }}>
           {period === "week" ? "radial" : period === "month" ? "stream" : "swimlane"} · {cfg.sub}
         </div>
         <div style={{ display: "flex", justifyContent: "center" }}>
