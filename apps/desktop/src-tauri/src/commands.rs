@@ -332,21 +332,31 @@ pub async fn get_digests(
 // ── Sync ───────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn sync_now(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+pub async fn sync_now(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
     let state = state.lock().await;
     sync_incremental(&state.pool, &state.config.repo, &state.config)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+    Ok(())
 }
 
 /// Full rebuild — drops all reconstructable tables and re-walks the repo.
 /// Exposed in Settings UI for when the user wants a clean slate.
 #[tauri::command]
-pub async fn rebuild_db(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
+pub async fn rebuild_db(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
     let state = state.lock().await;
     rebuild_from_disk(&state.pool, &state.config.repo, &state.config)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+    Ok(())
 }
 
 #[tauri::command]

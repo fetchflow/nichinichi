@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AskPanel } from "./components/ai/AskPanel";
 import { useAi } from "./hooks/useAi";
 import { useOrg } from "./hooks/useOrg";
+import { useSyncStatus } from "./hooks/useSyncStatus";
 import { useTheme } from "./hooks/useTheme";
 import type { Section } from "./types";
 import { DashboardView } from "./views/DashboardView";
@@ -20,11 +21,30 @@ const NAV_ITEMS: { id: Section; label: string }[] = [
   { id: "settings", label: "Settings" },
 ];
 
+function relativeTime(date: Date): string {
+  const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (secs < 15) return "just now";
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export default function App() {
   const [section, setSection] = useState<Section>("dashboard");
   const { theme, setTheme } = useTheme();
   const { activeOrg, setActiveOrg, orgs } = useOrg();
   const ai = useAi();
+  const sync = useSyncStatus();
+
+  // Tick every 30s to keep relative time display fresh
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <div className="flex h-screen bg-gray-900 text-gray-100 select-none overflow-hidden">
@@ -78,6 +98,28 @@ export default function App() {
             <span className="text-sm font-medium text-gray-300 capitalize">
               {section}
             </span>
+
+            {/* Sync indicator */}
+            <button
+              onClick={sync.syncNow}
+              disabled={sync.syncing}
+              title={sync.syncing ? "Syncing…" : "Click to sync now"}
+              className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-400
+                         disabled:cursor-default transition-colors font-mono"
+            >
+              <span
+                className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                  sync.syncing
+                    ? "bg-violet-500 animate-pulse"
+                    : "bg-gray-700"
+                }`}
+              />
+              {sync.syncing
+                ? "syncing…"
+                : sync.lastSyncAt
+                ? `synced ${relativeTime(sync.lastSyncAt)}`
+                : "never synced"}
+            </button>
           </header>
 
           {/* View */}
@@ -92,7 +134,12 @@ export default function App() {
             )}
             {section === "reports" && <ReportsView activeOrg={activeOrg} />}
             {section === "settings" && (
-              <SettingsView theme={theme} onThemeChange={setTheme} />
+              <SettingsView
+                theme={theme}
+                onThemeChange={setTheme}
+                syncNow={sync.syncNow}
+                syncing={sync.syncing}
+              />
             )}
           </div>
         </div>
