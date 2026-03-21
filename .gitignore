@@ -1,0 +1,31 @@
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
+
+# DevLog data
+devlog.db
+devlog.db-shm
+devlog.db-wal
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+dist/
+
+# Tauri
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# Environment
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

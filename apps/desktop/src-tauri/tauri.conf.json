@@ -1,0 +1,33 @@
+{
+  "productName": "DevLog",
+  "version": "0.1.0",
+  "identifier": "com.fetchflow.devlog",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "icon": ["icons/icon.png"]
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "DevLog",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

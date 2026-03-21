@@ -1,0 +1,8 @@
+{
+  "name": "devlog-workspace",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "workspaces": [
+    "apps/desktop"
+  ]
+}
