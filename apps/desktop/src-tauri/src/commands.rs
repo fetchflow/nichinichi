@@ -151,7 +151,12 @@ pub async fn get_goals(
             let path_str = path.to_string_lossy().to_string();
             if let Ok(goal) = devlog_parser::goal::parse_goal_file(&content, &path_str) {
                 let status_match = status.as_ref().map_or(true, |s| goal.status.to_string() == *s);
-                let org_match = org.as_ref().map_or(true, |o| goal.org.as_deref() == Some(o.as_str()));
+                let org_match = match (org.as_deref(), goal.org.as_deref()) {
+                    (None, _) => true,
+                    (Some("personal"), None) => true,
+                    (Some(o), Some(g)) => o == g,
+                    _ => false,
+                };
                 if status_match && org_match {
                     goals.push(goal);
                 }
@@ -269,7 +274,12 @@ pub async fn get_playbooks(
         let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
         let path_str = path.to_string_lossy().to_string();
         if let Ok(pb) = devlog_parser::playbook::parse_playbook_file(&content, &path_str) {
-            let org_match = org.as_ref().map_or(true, |o| pb.org.as_deref() == Some(o.as_str()));
+            let org_match = match (org.as_deref(), pb.org.as_deref()) {
+                (None, _) => true,
+                (Some("personal"), None) => true,
+                (Some(o), Some(g)) => o == g,
+                _ => false,
+            };
             if org_match {
                 playbooks.push(pb);
             }
@@ -277,6 +287,46 @@ pub async fn get_playbooks(
     }
 
     Ok(playbooks)
+}
+
+// ── Digests ─────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_digests(
+    org: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<devlog_types::Digest>, String> {
+    let state = state.lock().await;
+    let dir = state.config.repo.join("digests");
+    if !dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut digests = Vec::new();
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let path_str = path.to_string_lossy().to_string();
+        if let Ok(digest) = devlog_parser::digest::parse_digest_file(&content, &path_str) {
+            let org_match = match (org.as_deref(), digest.org.as_deref()) {
+                (None, _) => true,
+                (Some("personal"), None) => true,
+                (Some(o), Some(g)) => o == g,
+                _ => false,
+            };
+            if org_match {
+                digests.push(digest);
+            }
+        }
+    }
+
+    // Sort newest first by period_end
+    digests.sort_by(|a, b| b.period_end.cmp(&a.period_end));
+    Ok(digests)
 }
 
 // ── Sync ───────────────────────────────────────────────────────────────────

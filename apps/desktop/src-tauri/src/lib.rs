@@ -36,6 +36,7 @@ pub fn run() {
             commands::accept_suggestion,
             commands::dismiss_suggestion,
             commands::get_playbooks,
+            commands::get_digests,
             commands::sync_now,
             commands::rebuild_db,
             commands::get_last_sync,

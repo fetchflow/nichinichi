@@ -4,10 +4,12 @@ import { SkeletonBlock } from "../components/Skeleton";
 
 interface DigestRecord {
   id: string;
-  type: string;
+  digest_type: string;
   content: string;
   period_start: string;
   period_end: string;
+  entry_count?: number;
+  org?: string;
   created_at?: string;
 }
 
@@ -15,16 +17,19 @@ interface Props {
   activeOrg: string;
 }
 
-export function ReportsView({ activeOrg: _activeOrg }: Props) {
+export function ReportsView({ activeOrg }: Props) {
   const [digests, setDigests] = useState<DigestRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<DigestRecord | null>(null);
 
   useEffect(() => {
-    // Fetch digests directly from SQLite via a get_settings-style command
-    // For now, show a placeholder until digest generation is wired up
-    setLoading(false);
-  }, []);
+    setLoading(true);
+    invoke<DigestRecord[]>("get_digests", {
+      org: activeOrg === "all" ? null : activeOrg,
+    })
+      .then(setDigests)
+      .finally(() => setLoading(false));
+  }, [activeOrg]);
 
   if (loading) {
     return (
@@ -54,8 +59,8 @@ export function ReportsView({ activeOrg: _activeOrg }: Props) {
                 selected?.id === d.id ? "bg-gray-800" : ""
               }`}
             >
-              <p className="text-sm text-gray-300">{d.period_start}</p>
-              <p className="text-xs text-gray-600">{d.type}</p>
+              <p className="text-sm text-gray-300">{d.period_start} – {d.period_end}</p>
+              <p className="text-xs text-gray-600">{d.digest_type}{d.entry_count != null ? ` · ${d.entry_count} entries` : ""}</p>
             </button>
           ))
         )}
