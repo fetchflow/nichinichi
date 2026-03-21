@@ -2,7 +2,7 @@ mod commands;
 
 use commands::AppState;
 use devlog_parser::load_config;
-use devlog_sync::{open_db, start_file_watcher};
+use devlog_sync::{open_db, start_file_watcher, sync_incremental};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -89,16 +89,26 @@ async fn setup_app(app: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         config: config.clone(),
     }));
 
+    // Catch up on any files that changed while the app was offline.
+    // Runs in the background so the UI is not blocked on startup.
+    let startup_app = app.clone();
+    let startup_pool = pool.clone();
+    let startup_repo = config.repo.clone();
+    let startup_config = config.clone();
+    tokio::spawn(async move {
+        if let Err(e) = sync_incremental(&startup_pool, &startup_repo, &startup_config).await {
+            eprintln!("startup sync error: {e}");
+        }
+        let _ = startup_app.emit("sync-update", ());
+    });
+
     // Build system tray
-    build_tray(&app, pool)?;
+    build_tray(&app)?;
 
     Ok(())
 }
 
-fn build_tray(
-    app: &tauri::AppHandle,
-    pool: sqlx::SqlitePool,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn build_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let sync_item = MenuItem::with_id(app, "sync", "Sync Now", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit DevLog", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&sync_item, &quit_item])?;
@@ -108,14 +118,12 @@ fn build_tray(
         .menu(&menu)
         .on_menu_event(move |_tray, event| match event.id().as_ref() {
             "sync" => {
-                let pool = pool.clone();
                 let app = app_for_tray.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Some(state) = app.try_state::<tokio::sync::Mutex<AppState>>() {
                         let state = state.lock().await;
-                        let target = devlog_sync::LocalSqlite::new(pool);
-                        if let Err(e) = devlog_sync::SyncTarget::rebuild(
-                            &target,
+                        if let Err(e) = sync_incremental(
+                            &state.pool,
                             &state.config.repo,
                             &state.config,
                         )

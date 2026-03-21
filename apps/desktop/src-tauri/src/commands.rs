@@ -1,5 +1,5 @@
 use devlog_ai::{save_conversation, search_entries, AiClient};
-use devlog_sync::{LocalSqlite, SyncTarget};
+use devlog_sync::{rebuild_from_disk, sync_incremental, LocalSqlite, SyncTarget};
 use devlog_types::{Config, Goal, OrgScope, ParsedEntry, Playbook};
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -334,21 +334,19 @@ pub async fn get_digests(
 #[tauri::command]
 pub async fn sync_now(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
     let state = state.lock().await;
-    let target = LocalSqlite::new(state.pool.clone());
-    target
-        .rebuild(&state.config.repo, &state.config)
+    sync_incremental(&state.pool, &state.config.repo, &state.config)
         .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('last_sync_at', datetime('now'))")
-        .execute(&state.pool)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
+        .map_err(|e| e.to_string())
 }
 
+/// Full rebuild — drops all reconstructable tables and re-walks the repo.
+/// Exposed in Settings UI for when the user wants a clean slate.
 #[tauri::command]
 pub async fn rebuild_db(state: State<'_, Mutex<AppState>>) -> Result<(), String> {
-    sync_now(state).await
+    let state = state.lock().await;
+    rebuild_from_disk(&state.pool, &state.config.repo, &state.config)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

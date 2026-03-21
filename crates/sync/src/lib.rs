@@ -1,11 +1,14 @@
 pub mod db;
+pub mod incremental;
 pub mod local_sqlite;
+pub mod rebuild;
 pub mod sync_target;
 pub mod watcher;
-pub mod rebuild;
 
 pub use db::open_db;
+pub use incremental::sync_incremental;
 pub use local_sqlite::LocalSqlite;
+pub use rebuild::rebuild_from_disk;
 pub use sync_target::SyncTarget;
 pub use watcher::start_file_watcher;
 
