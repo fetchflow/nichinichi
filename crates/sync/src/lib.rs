@@ -7,6 +7,7 @@ pub mod rebuild;
 pub use db::open_db;
 pub use local_sqlite::LocalSqlite;
 pub use sync_target::SyncTarget;
+pub use watcher::start_file_watcher;
 
 use thiserror::Error;
 

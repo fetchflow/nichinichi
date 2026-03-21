@@ -21,6 +21,8 @@ serde_json    = { workspace = true }
 open          = { workspace = true }
 urlencoding   = { workspace = true }
 chrono        = { workspace = true }
+dirs          = { workspace = true }
+sqlx          = { workspace = true }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
