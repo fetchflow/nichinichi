@@ -42,6 +42,7 @@ pub fn run() {
             commands::ai_ask,
             commands::save_ai_conversation_cmd,
             commands::get_stats,
+            commands::get_activity,
             commands::get_settings,
             commands::set_setting,
             commands::save_ai_key,

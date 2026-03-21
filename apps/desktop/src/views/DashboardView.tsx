@@ -1,9 +1,18 @@
+import { useState } from "react";
 import { Heatmap } from "../components/stats/Heatmap";
+import { MomentumGraph } from "../components/stats/MomentumGraph";
+import { RadialGraph } from "../components/graphs/RadialGraph";
+import { StreamGraph } from "../components/graphs/StreamGraph";
+import { SwimLaneGraph } from "../components/graphs/SwimLaneGraph";
 import { SkeletonBlock, SkeletonRow } from "../components/Skeleton";
 import { useStats } from "../hooks/useStats";
 import { useGoals } from "../hooks/useGoals";
 import { useEntries } from "../hooks/useEntries";
+import { useActivity } from "../hooks/useActivity";
 import { TYPE_COLORS } from "../types";
+import type { ActivityPayload } from "../types";
+
+type DrillPeriod = "week" | "month" | "year";
 
 interface Props {
   activeOrg: string;
@@ -13,9 +22,22 @@ export function DashboardView({ activeOrg }: Props) {
   const org = activeOrg === "all" ? undefined : activeOrg;
   const { stats, loading: statsLoading } = useStats(org);
   const { goals, loading: goalsLoading } = useGoals("active", org);
+  const { activity, loading: activityLoading } = useActivity(org);
 
   const today = new Date().toISOString().split("T")[0];
   const { entries: todayEntries, loading: entriesLoading } = useEntries(today, activeOrg);
+
+  const [drill, setDrill] = useState<DrillPeriod | null>(null);
+
+  if (drill !== null && activity) {
+    return (
+      <DrillView
+        period={drill}
+        activity={activity}
+        onBack={() => setDrill(null)}
+      />
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -46,6 +68,57 @@ export function DashboardView({ activeOrg }: Props) {
           <Heatmap cells={stats?.heatmap ?? []} />
         )}
       </section>
+
+      {/* Momentum graph */}
+      <section>
+        {activityLoading ? (
+          <SkeletonBlock lines={2} />
+        ) : activity && activity.weekly.length > 0 ? (
+          <div style={{ border: "1px solid #e8e6de", borderRadius: "10px", padding: "11px 13px", background: "#fff" }}>
+            <MomentumGraph weeks={activity.weekly} />
+          </div>
+        ) : null}
+      </section>
+
+      {/* Progress mini-graph cards */}
+      {!activityLoading && activity && (
+        <section>
+          <div style={{ fontSize: "9px", color: "#aaa", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+            progress · click to explore
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <MiniGraphCard
+              title="weekly"
+              sub={activity.weekly[activity.weekly.length - 1]?.label ?? ""}
+              total={activity.weekly.reduce((s, w) => s + Object.values(w.entries).reduce((a, c) => a + c, 0), 0)}
+              onClick={() => setDrill("week")}
+            >
+              <RadialGraph
+                days={activity.weekly.map((w) => ({ label: w.label, entries: w.entries }))}
+                size="mini"
+              />
+            </MiniGraphCard>
+
+            <MiniGraphCard
+              title="monthly"
+              sub={new Date().toLocaleString("default", { month: "long", year: "numeric" })}
+              total={activity.monthly.reduce((s, d) => s + Object.values(d.entries).reduce((a, c) => a + c, 0), 0)}
+              onClick={() => setDrill("month")}
+            >
+              <StreamGraph days={activity.monthly} size="mini" />
+            </MiniGraphCard>
+
+            <MiniGraphCard
+              title="yearly"
+              sub={String(new Date().getFullYear())}
+              total={activity.yearly.reduce((s, m) => s + Object.values(m.entries).reduce((a, c) => a + c, 0), 0)}
+              onClick={() => setDrill("year")}
+            >
+              <SwimLaneGraph months={activity.yearly} size="mini" />
+            </MiniGraphCard>
+          </div>
+        </section>
+      )}
 
       {/* Entry type breakdown */}
       {stats && (
@@ -130,6 +203,175 @@ export function DashboardView({ activeOrg }: Props) {
     </div>
   );
 }
+
+// ── Mini graph card wrapper ────────────────────────────────────────────────
+
+function MiniGraphCard({
+  title,
+  sub,
+  total,
+  onClick,
+  children,
+}: {
+  title: string;
+  sub: string;
+  total: number;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        border: `1px solid ${hov ? "#534AB7" : "#e8e6de"}`,
+        borderRadius: "10px",
+        padding: "12px",
+        background: "#fff",
+        cursor: "pointer",
+        transition: "border-color 0.15s",
+        flex: 1,
+        minWidth: 0,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "8px" }}>
+        <div>
+          <div style={{ fontSize: "9px", color: "#aaa", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px" }}>
+            {title}
+          </div>
+          <div style={{ fontSize: "8px", color: "#ccc", fontFamily: "monospace" }}>{sub}</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#1a1a18", fontFamily: "monospace", lineHeight: 1 }}>
+              {total}
+            </div>
+            <div style={{ fontSize: "7px", color: "#bbb" }}>entries</div>
+          </div>
+          <span style={{ color: hov ? "#534AB7" : "#ddd" }}>→</span>
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>{children}</div>
+    </div>
+  );
+}
+
+// ── Drill view ─────────────────────────────────────────────────────────────
+
+function DrillView({
+  period,
+  activity,
+  onBack,
+}: {
+  period: DrillPeriod;
+  activity: ActivityPayload;
+  onBack: () => void;
+}) {
+  const cfg = {
+    week: { title: "this week", sub: "last 9 weeks" },
+    month: {
+      title: "this month",
+      sub: new Date().toLocaleString("default", { month: "long", year: "numeric" }),
+    },
+    year: { title: "this year", sub: String(new Date().getFullYear()) },
+  }[period];
+
+  const sum = (buckets: { entries: Record<string, number> }[], key?: string) =>
+    buckets.reduce(
+      (s, b) =>
+        s +
+        (key
+          ? (b.entries[key] ?? 0)
+          : Object.values(b.entries).reduce((a, c) => a + c, 0)),
+      0
+    );
+
+  const buckets =
+    period === "week"
+      ? activity.weekly
+      : period === "month"
+      ? activity.monthly
+      : activity.yearly;
+
+  const statItems: [string, number][] = [
+    ["entries", sum(buckets)],
+    ["score", sum(buckets, "score")],
+    ["decisions", sum(buckets, "decision")],
+    ["solutions", sum(buckets, "solution")],
+  ];
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      {/* Breadcrumb */}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <button
+          onClick={onBack}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "3px",
+            fontSize: "11px",
+            color: "#aaa",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "monospace",
+            padding: 0,
+          }}
+        >
+          ← dashboard
+        </button>
+        <span style={{ color: "#e8e6de" }}>·</span>
+        <span style={{ fontSize: "11px", fontWeight: 600, color: "#1a1a18", fontFamily: "monospace" }}>
+          {cfg.title}
+        </span>
+        <span style={{ fontSize: "10px", color: "#bbb", fontFamily: "monospace" }}>{cfg.sub}</span>
+      </div>
+
+      {/* Stats grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+        {statItems.map(([label, val]) => (
+          <div
+            key={label}
+            style={{
+              border: "1px solid #e8e6de",
+              borderRadius: "8px",
+              padding: "10px",
+              background: "#fff",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#1a1a18", fontFamily: "monospace", lineHeight: 1 }}>
+              {val}
+            </div>
+            <div style={{ fontSize: "9px", color: "#bbb", marginTop: "3px" }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Full-size graph */}
+      <div style={{ border: "1px solid #e8e6de", borderRadius: "10px", padding: "14px 16px", background: "#fff" }}>
+        <div style={{ fontSize: "9px", color: "#aaa", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "10px" }}>
+          {period === "week" ? "radial" : period === "month" ? "stream" : "swimlane"} · {cfg.sub}
+        </div>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          {period === "week" && (
+            <RadialGraph
+              days={activity.weekly.map((w) => ({ label: w.label, entries: w.entries }))}
+              size="full"
+            />
+          )}
+          {period === "month" && <StreamGraph days={activity.monthly} size="full" />}
+          {period === "year" && <SwimLaneGraph months={activity.yearly} size="full" />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Stat card ──────────────────────────────────────────────────────────────
 
 function StatCard({
   label,

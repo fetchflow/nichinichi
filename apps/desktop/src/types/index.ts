@@ -25,6 +25,40 @@ export interface StatsPayload {
   heatmap: HeatmapCell[];
 }
 
+export interface WeekBucket {
+  week_start: string;
+  label: string;
+  entries: Record<string, number>;
+}
+
+export interface DayBucket {
+  date: string;
+  entries: Record<string, number>;
+}
+
+export interface MonthBucket {
+  month: string;
+  label: string;
+  entries: Record<string, number>;
+}
+
+export interface ActivityPayload {
+  weekly: WeekBucket[];
+  monthly: DayBucket[];
+  yearly: MonthBucket[];
+}
+
+export const TYPE_ORDER = [
+  "score",
+  "solution",
+  "decision",
+  "ai",
+  "reflection",
+  "log",
+] as const;
+
+export type TypeKey = (typeof TYPE_ORDER)[number];
+
 export type Section =
   | "dashboard"
   | "log"

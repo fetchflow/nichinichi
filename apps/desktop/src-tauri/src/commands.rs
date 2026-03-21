@@ -471,6 +471,159 @@ fn compute_streak<'a>(dates: impl Iterator<Item = &'a str>) -> i64 {
     streak
 }
 
+// ── Activity ────────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct WeekBucket {
+    pub week_start: String,
+    pub label: String,
+    pub entries: HashMap<String, i64>,
+}
+
+#[derive(Serialize)]
+pub struct DayBucket {
+    pub date: String,
+    pub entries: HashMap<String, i64>,
+}
+
+#[derive(Serialize)]
+pub struct MonthBucket {
+    pub month: String,
+    pub label: String,
+    pub entries: HashMap<String, i64>,
+}
+
+#[derive(Serialize)]
+pub struct ActivityPayload {
+    pub weekly: Vec<WeekBucket>,
+    pub monthly: Vec<DayBucket>,
+    pub yearly: Vec<MonthBucket>,
+}
+
+#[tauri::command]
+pub async fn get_activity(
+    org: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<ActivityPayload, String> {
+    use chrono::{Datelike, Duration, Local, NaiveDate};
+
+    let state = state.lock().await;
+    let pool = &state.pool;
+
+    let org_clause = match &org {
+        Some(o) => format!(" AND org = '{}'", o.replace('\'', "''")),
+        None => String::new(),
+    };
+
+    // ── Weekly (last 9 weeks) ─────────────────────────────────────────────
+    // Compute the Monday of the current week, then go back 8 more weeks
+    let today = Local::now().date_naive();
+    let days_since_monday = today.weekday().num_days_from_monday() as i64;
+    let this_monday = today - Duration::days(days_since_monday);
+
+    // Build 9 MonNday slots (oldest first)
+    let mut week_starts: Vec<NaiveDate> = (0..9)
+        .rev()
+        .map(|i| this_monday - Duration::weeks(i))
+        .collect();
+    week_starts.sort();
+
+    let week_rows: Vec<(String, String, i64)> = sqlx::query_as::<_, (String, String, i64)>(&format!(
+        "SELECT date(date, '-' || cast(((cast(strftime('%w', date) as integer) + 6) % 7) as text) || ' days') as week_start, \
+         type, COUNT(*) as cnt \
+         FROM entries \
+         WHERE date >= date('now', '-62 days'){org_clause} \
+         GROUP BY week_start, type ORDER BY week_start"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(|e: sqlx::Error| e.to_string())?;
+
+    // Group by week_start
+    let mut week_map: HashMap<String, HashMap<String, i64>> = HashMap::new();
+    for (ws, t, cnt) in week_rows {
+        week_map.entry(ws).or_default().insert(t, cnt);
+    }
+
+    let month_abbrs = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    let weekly: Vec<WeekBucket> = week_starts
+        .iter()
+        .map(|d| {
+            let key = d.format("%Y-%m-%d").to_string();
+            let mo = (d.month0() as usize).min(11);
+            let label = format!("{} {}", month_abbrs[mo], d.day());
+            WeekBucket {
+                week_start: key.clone(),
+                label,
+                entries: week_map.remove(&key).unwrap_or_default(),
+            }
+        })
+        .collect();
+
+    // ── Monthly (current month, all days) ────────────────────────────────
+    let year = today.year();
+    let month = today.month();
+    let days_in_month = if month == 12 {
+        NaiveDate::from_ymd_opt(year + 1, 1, 1)
+    } else {
+        NaiveDate::from_ymd_opt(year, month + 1, 1)
+    }
+    .map(|d| (d - NaiveDate::from_ymd_opt(year, month, 1).unwrap()).num_days())
+    .unwrap_or(30);
+
+    let month_rows: Vec<(String, String, i64)> = sqlx::query_as::<_, (String, String, i64)>(&format!(
+        "SELECT date, type, COUNT(*) as cnt FROM entries \
+         WHERE strftime('%Y-%m', date) = strftime('%Y-%m', 'now'){org_clause} \
+         GROUP BY date, type ORDER BY date"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(|e: sqlx::Error| e.to_string())?;
+
+    let mut month_day_map: HashMap<String, HashMap<String, i64>> = HashMap::new();
+    for (d, t, cnt) in month_rows {
+        month_day_map.entry(d).or_default().insert(t, cnt);
+    }
+
+    let monthly: Vec<DayBucket> = (1..=days_in_month)
+        .map(|day| {
+            let date = format!("{year}-{month:02}-{day:02}");
+            DayBucket {
+                entries: month_day_map.remove(&date).unwrap_or_default(),
+                date,
+            }
+        })
+        .collect();
+
+    // ── Yearly (current year, all months) ────────────────────────────────
+    let year_rows: Vec<(String, String, i64)> = sqlx::query_as::<_, (String, String, i64)>(&format!(
+        "SELECT strftime('%Y-%m', date) as month, type, COUNT(*) as cnt \
+         FROM entries WHERE strftime('%Y', date) = strftime('%Y', 'now'){org_clause} \
+         GROUP BY month, type ORDER BY month"
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(|e: sqlx::Error| e.to_string())?;
+
+    let mut year_map: HashMap<String, HashMap<String, i64>> = HashMap::new();
+    for (m, t, cnt) in year_rows {
+        year_map.entry(m).or_default().insert(t, cnt);
+    }
+
+    let yearly: Vec<MonthBucket> = (1..=12)
+        .map(|m| {
+            let month_key = format!("{year}-{m:02}");
+            MonthBucket {
+                label: month_abbrs[(m - 1) as usize].to_string(),
+                entries: year_map.remove(&month_key).unwrap_or_default(),
+                month: month_key,
+            }
+        })
+        .collect();
+
+    Ok(ActivityPayload { weekly, monthly, yearly })
+}
+
 // ── Settings ───────────────────────────────────────────────────────────────
 
 #[tauri::command]
