@@ -1,0 +1,16 @@
+[package]
+name = "devlog-ai"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+devlog-types = { workspace = true }
+devlog-sync  = { workspace = true }
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+sqlx         = { workspace = true }
+tokio        = { workspace = true }
+thiserror    = { workspace = true }
+reqwest      = { workspace = true }
+futures      = { workspace = true }
+chrono       = { workspace = true }

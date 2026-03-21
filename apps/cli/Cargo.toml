@@ -1,0 +1,20 @@
+[package]
+name = "devlog-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "devlog"
+path = "src/main.rs"
+
+[dependencies]
+devlog-types  = { workspace = true }
+devlog-parser = { workspace = true }
+devlog-sync   = { workspace = true }
+devlog-ai     = { workspace = true }
+clap          = { workspace = true }
+colored       = { workspace = true }
+anyhow        = { workspace = true }
+tokio         = { workspace = true }
+chrono        = { workspace = true }
+serde_json    = { workspace = true }
