@@ -90,12 +90,14 @@ async fn setup_app(app: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
     }));
 
     // Catch up on any files that changed while the app was offline.
-    // Runs in the background so the UI is not blocked on startup.
+    // Delayed slightly so initial UI queries (get_entries, get_goals, etc.)
+    // don't contend with the sync writes on startup.
     let startup_app = app.clone();
     let startup_pool = pool.clone();
     let startup_repo = config.repo.clone();
     let startup_config = config.clone();
     tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         if let Err(e) = sync_incremental(&startup_pool, &startup_repo, &startup_config).await {
             eprintln!("startup sync error: {e}");
         }

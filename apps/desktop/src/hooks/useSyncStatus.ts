@@ -38,12 +38,14 @@ export function useSyncStatus(): SyncStatus {
     setSyncing(true);
     try {
       await invoke("sync_now");
+      refresh();
     } catch (e) {
       console.error("sync failed:", e);
+    } finally {
       syncingRef.current = false;
       setSyncing(false);
     }
-  }, []);
+  }, [refresh]);
 
   return { lastSyncAt, syncing, syncNow };
 }
