@@ -149,17 +149,17 @@ pub async fn get_goals(
             }
             let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
             let path_str = path.to_string_lossy().to_string();
-            if let Ok(goal) = devlog_parser::goal::parse_goal_file(&content, &path_str) {
-                let status_match = status.as_ref().map_or(true, |s| goal.status.to_string() == *s);
-                let org_match = match (org.as_deref(), goal.org.as_deref()) {
-                    (None, _) => true,
-                    (Some("personal"), None) => true,
-                    (Some(o), Some(g)) => o == g,
-                    _ => false,
-                };
-                if status_match && org_match {
-                    goals.push(goal);
-                }
+            let goal = devlog_parser::goal::parse_goal_file(&content, &path_str)
+                .map_err(|e| format!("parse error in {path_str}: {e}"))?;
+            let status_match = status.as_ref().map_or(true, |s| goal.status.to_string() == *s);
+            let org_match = match (org.as_deref(), goal.org.as_deref()) {
+                (None, _) => true,
+                (Some("personal"), None) => true,
+                (Some(o), Some(g)) => o == g,
+                _ => false,
+            };
+            if status_match && org_match {
+                goals.push(goal);
             }
         }
     }

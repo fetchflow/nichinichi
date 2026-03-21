@@ -5,14 +5,17 @@ import type { Goal } from "../types";
 export function useGoals(status?: string, org?: string) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
+    setError(null);
     invoke<Goal[]>("get_goals", {
       status: status ?? null,
       org: org === "all" ? null : org ?? null,
     })
       .then(setGoals)
+      .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [status, org]);
 
@@ -33,5 +36,5 @@ export function useGoals(status?: string, org?: string) {
     [load]
   );
 
-  return { goals, loading, reload: load, toggleStep, archiveGoal };
+  return { goals, loading, error, reload: load, toggleStep, archiveGoal };
 }

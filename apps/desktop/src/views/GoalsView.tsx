@@ -7,10 +7,18 @@ interface Props {
 }
 
 export function GoalsView({ activeOrg }: Props) {
-  const { goals, loading, toggleStep, archiveGoal } = useGoals(
+  const { goals, loading, error, toggleStep, archiveGoal } = useGoals(
     "active",
     activeOrg
   );
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-red-400 font-mono">Error: {error}</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
