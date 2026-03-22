@@ -81,6 +81,14 @@ It is gitignored. Never commit it.
 2. Register it in the `tauri::generate_handler![]` list in `lib.rs`
 3. Add the corresponding TypeScript `invoke()` call in the frontend hook or view
 
+## Adding a new Tauri plugin
+
+1. Add the Rust crate to `[workspace.dependencies]` in the root `Cargo.toml`
+2. Add it to `apps/desktop/src-tauri/Cargo.toml` `[dependencies]`
+3. Register `.plugin(plugin::init())` in `lib.rs` before `.setup(...)`
+4. Add the required permission to `apps/desktop/src-tauri/capabilities/default.json`
+5. Add the npm package to `apps/desktop/package.json` and run `pnpm install`
+
 ## Running a production build
 
 ```bash
