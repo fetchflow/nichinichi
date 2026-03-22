@@ -61,6 +61,27 @@ export function GoalsView({ activeOrg }: Props) {
   // Entries for the selected date (used in the entry picker)
   const [dateEntries, setDateEntries] = useState<Entry[]>([]);
   const [dateEntriesLoading, setDateEntriesLoading] = useState(false);
+  // Lookup map for refs: "YYYY-MM-DD HH:MM" → Entry body
+  const [refEntries, setRefEntries] = useState<Map<string, string>>(new Map());
+
+  // Fetch entries for all ref dates whenever goals change
+  useEffect(() => {
+    const allRefs = goals.flatMap((g) => g.progress.flatMap((p) => p.refs ?? []));
+    if (allRefs.length === 0) return;
+
+    const uniqueDates = [...new Set(allRefs.map((r) => r.split(" ")[0]).filter(Boolean))];
+    Promise.all(
+      uniqueDates.map((date) =>
+        invoke<Entry[]>("get_entries", { date }).catch(() => [] as Entry[])
+      )
+    ).then((results) => {
+      const map = new Map<string, string>();
+      results.flat().forEach((e) => {
+        map.set(`${e.date} ${e.time}`, e.body);
+      });
+      setRefEntries(map);
+    });
+  }, [goals]);
 
   // ── Meta edit ──────────────────────────────────────────────────────────────
 
@@ -570,9 +591,11 @@ export function GoalsView({ activeOrg }: Props) {
                   <div className="ml-[4.5rem] mt-1 space-y-0.5">
                     {entry.refs.map((ref) => {
                       const time = ref.split(" ")[1] ?? ref;
+                      const body = refEntries.get(ref);
                       return (
-                        <p key={ref} className="text-xs text-gray-400 dark:text-gray-600 font-mono">
-                          → {time}
+                        <p key={ref} className="text-xs text-gray-400 dark:text-gray-600">
+                          <span className="font-mono">{time}</span>
+                          {body && <span className="ml-2 text-gray-500 dark:text-gray-500">{body}</span>}
                         </p>
                       );
                     })}
