@@ -1200,6 +1200,79 @@ pub async fn save_playbook(
     Ok(pb)
 }
 
+
+#[tauri::command]
+pub async fn create_playbook(
+    app: tauri::AppHandle,
+    title: String,
+    org: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Playbook, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+    let pb_dir = config.repo.join("playbooks");
+
+    let slug: String = title
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let slug = if slug.is_empty() { "untitled".to_string() } else { slug };
+
+    let mut file_path = pb_dir.join(format!("{slug}.md"));
+    let mut counter = 1u32;
+    while file_path.exists() {
+        file_path = pb_dir.join(format!("{slug}-{counter}.md"));
+        counter += 1;
+    }
+
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let org_val = org.as_deref().unwrap_or("null");
+    let content = format!(
+        "---\ntitle: {title}\ntags: []\nforked_from: null\norg: {org_val}\ncreated: {today}\n---\n\n## steps\n\n"
+    );
+
+    std::fs::create_dir_all(&pb_dir).map_err(|e| e.to_string())?;
+    std::fs::write(&file_path, &content).map_err(|e| e.to_string())?;
+
+    let path_str = file_path.to_string_lossy().to_string();
+    let pb = devlog_parser::playbook::parse_playbook_file(&content, &path_str)
+        .map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_playbook(&pb).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(pb)
+}
+
+#[tauri::command]
+pub async fn delete_playbook(
+    app: tauri::AppHandle,
+    id: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let state = state.lock().await;
+    let config = &state.config;
+    let file_path = config.repo.join("playbooks").join(format!("{id}.md"));
+
+    if file_path.exists() {
+        std::fs::remove_file(&file_path).map_err(|e| e.to_string())?;
+    }
+
+    sqlx::query("DELETE FROM playbooks WHERE id = ?")
+        .bind(&id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(())
+}
+
 // ── Orgs ───────────────────────────────────────────────────────────────────
 
 #[tauri::command]

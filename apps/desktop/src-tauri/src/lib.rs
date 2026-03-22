@@ -54,6 +54,8 @@ pub fn run() {
             commands::update_goal_meta,
             commands::save_goal_content,
             commands::save_playbook,
+            commands::create_playbook,
+            commands::delete_playbook,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
