@@ -10,9 +10,15 @@ export interface AiMessage {
 export function useAi() {
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
-  const [lastResponse, setLastResponse] = useState<string>("");
   const unlistenChunk = useRef<(() => void) | null>(null);
   const unlistenDone = useRef<(() => void) | null>(null);
+  // Refs so the stable event listeners can always read current values
+  const messagesRef = useRef<AiMessage[]>([]);
+  const currentOrgRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     // `cancelled` guards against React 18 strict-mode double-invoke:
@@ -38,7 +44,20 @@ export function useAi() {
 
     listen<string>("ai-done", (event) => {
       setStreaming(false);
-      setLastResponse(event.payload);
+      // Auto-save: build the definitive message list using the complete response
+      // from event.payload rather than messagesRef, which may lag by one render
+      // (the last ai-chunk setState hasn't flushed yet when ai-done fires).
+      const prev = messagesRef.current;
+      const lastIsAssistant = prev[prev.length - 1]?.role === "assistant";
+      const allMessages: AiMessage[] = lastIsAssistant
+        ? [...prev.slice(0, -1), { role: "assistant" as const, content: event.payload }]
+        : [...prev, { role: "assistant" as const, content: event.payload }];
+      if (allMessages.length > 0) {
+        invoke("save_ai_conversation_cmd", {
+          messages: allMessages,
+          org: currentOrgRef.current ?? null,
+        }).catch(() => {});
+      }
     }).then((fn) => {
       if (cancelled) fn();
       else unlistenDone.current = fn;
@@ -53,6 +72,7 @@ export function useAi() {
 
   const ask = useCallback(async (query: string, org?: string, model?: string) => {
     const history = messages; // capture prior turns before state update
+    currentOrgRef.current = org;
     setMessages((prev) => [...prev, { role: "user", content: query }]);
     setStreaming(true);
     try {
@@ -66,26 +86,13 @@ export function useAi() {
     }
   }, [messages]);
 
-  const save = useCallback(
-    async (org?: string) => {
-      if (!messages.length) return;
-      await invoke("save_ai_conversation_cmd", {
-        messages,
-        org: org ?? null,
-      });
-    },
-    [messages]
-  );
-
   const clear = useCallback(() => {
     setMessages([]);
-    setLastResponse("");
   }, []);
 
   const loadConversation = useCallback((loaded: AiMessage[]) => {
     setMessages(loaded);
-    setLastResponse("");
   }, []);
 
-  return { messages, streaming, ask, save, clear, loadConversation };
+  return { messages, streaming, ask, clear, loadConversation };
 }

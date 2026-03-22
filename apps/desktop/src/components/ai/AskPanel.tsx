@@ -15,13 +15,12 @@ interface Props {
   streaming: boolean;
   activeOrg: string;
   onAsk: (query: string, model: string) => void;
-  onSave: () => void;
   onClear: () => void;
   onClose: () => void;
   onLoad: (messages: AiMessage[]) => void;
 }
 
-export function AskPanel({ messages, streaming, activeOrg, onAsk, onSave, onClear, onClose, onLoad }: Props) {
+export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClose, onLoad }: Props) {
   const [input, setInput] = useState("");
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
@@ -118,14 +117,6 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onSave, onClea
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Ask Nichinichi</span>
         <div className="flex items-center gap-2">
-          {messages.length > 0 && !showHistory && (
-            <button
-              onClick={onSave}
-              className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-            >
-              save
-            </button>
-          )}
           <button
             onClick={() => { onClear(); setShowHistory(false); inputRef.current?.focus(); }}
             title="New chat"
