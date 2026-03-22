@@ -135,6 +135,15 @@ fn build_system_prompt(entries: &[ParsedEntry]) -> String {
          If you cannot find relevant information in the entries, say so clearly.\n\n\
          Always format your responses using Markdown. Use headers, bullet points, bold, \
          code blocks, and tables where appropriate to make the response easy to scan.\n\n\
+         When the user asks you to create, log, or add a journal entry, include a fenced \
+         code block with the language tag `nichinichi-entry` containing ONLY the entry body \
+         text in the format: `body text @org #type` (no timestamp — it is added automatically). \
+         Example:\n\
+         ```nichinichi-entry\n\
+         fixed JWT refresh bug, moved expiry check before decode @acme #solution\n\
+         ```\n\
+         You may suggest multiple entries as separate blocks. Do not invent org or type tags \
+         unless the user specified them.\n\n\
          ## Journal Entries\n\n",
     );
 
