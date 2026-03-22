@@ -127,7 +127,7 @@ export default function App() {
             {section === "dashboard" && (
               <DashboardView activeOrg={activeOrg} />
             )}
-            {section === "log" && <LogView activeOrg={activeOrg} workspaces={workspaces} />}
+            {section === "log" && <LogView activeOrg={activeOrg} workspaces={orgs} />}
             {section === "goals" && <GoalsView activeOrg={activeOrg} />}
             {section === "playbooks" && (
               <PlaybooksView activeOrg={activeOrg} />
