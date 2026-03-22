@@ -475,13 +475,19 @@ pub async fn ai_ask(
     query: String,
     history: Vec<ChatMessage>,
     org: Option<String>,
+    model: Option<String>,
     window: Window,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
-    let (pool, config) = {
+    let (pool, mut ai_config) = {
         let state = state.lock().await;
-        (state.pool.clone(), state.config.clone())
+        (state.pool.clone(), state.config.ai.clone())
     };
+
+    // Per-request model override
+    if let Some(m) = model {
+        ai_config.model = m;
+    }
 
     let org_scope = match org.as_deref() {
         None => OrgScope::All,
@@ -493,7 +499,7 @@ pub async fn ai_ask(
         .await
         .map_err(|e| e.to_string())?;
 
-    let client = AiClient::new(config.ai.clone());
+    let client = AiClient::new(ai_config);
     let window_clone = window.clone();
 
     let response = client
@@ -953,6 +959,18 @@ pub async fn get_ai_config(
         "base_url": state.config.ai.base_url,
         "model": state.config.ai.model,
     }))
+}
+
+#[tauri::command]
+pub async fn get_models(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<String>, String> {
+    let ai_config = {
+        let state = state.lock().await;
+        state.config.ai.clone()
+    };
+    let client = AiClient::new(ai_config);
+    client.list_models().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

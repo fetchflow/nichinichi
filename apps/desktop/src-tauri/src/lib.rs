@@ -51,6 +51,7 @@ pub fn run() {
             commands::save_ai_key,
             commands::save_ai_config,
             commands::get_ai_config,
+            commands::get_models,
             commands::get_config_repo,
             commands::save_config_repo,
             commands::get_orgs,

@@ -17,6 +17,36 @@ impl AiClient {
         }
     }
 
+    /// Fetch available model IDs from the Open WebUI `/api/models` endpoint.
+    pub async fn list_models(&self) -> Result<Vec<String>, AiError> {
+        let url = format!(
+            "{}/api/models",
+            self.config.base_url.trim_end_matches('/')
+        );
+        let resp = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.config.api_key))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AiError::Api { status, body });
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        let ids = json["data"]
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .filter_map(|m| m["id"].as_str().map(String::from))
+            .collect();
+
+        Ok(ids)
+    }
+
     /// Ask the AI a question, streaming the response.
     ///
     /// `context_entries` are FTS5 results used to build the system prompt.
