@@ -132,8 +132,8 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
     <div className="flex flex-col h-full border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200 dark:border-gray-800">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+        <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+          <span className="text-xs font-semibold tracking-wide text-gray-500 dark:text-gray-400 uppercase shrink-0">
             Nichinichi
           </span>
           {models.length > 0 && (
@@ -141,8 +141,8 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
               disabled={streaming}
-              className="bg-transparent text-xs text-gray-400 dark:text-gray-500 border-none focus:outline-none
-                         disabled:opacity-50 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="min-w-0 max-w-full bg-transparent text-xs text-gray-400 dark:text-gray-500 border-none focus:outline-none
+                         disabled:opacity-50 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300 transition-colors truncate"
             >
               {models.map((m) => (
                 <option key={m} value={m}>{m}</option>
