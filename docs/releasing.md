@@ -116,10 +116,11 @@ cd apps/desktop
 pnpm tauri build
 ```
 
-Output lands in `apps/desktop/src-tauri/target/release/bundle/`:
+Output lands in `target/release/bundle/` at the repo root (Cargo
+workspace `target/` is always at the workspace root, not inside `src-tauri/`):
 
 ```
-bundle/
+target/release/bundle/
 ├── dmg/          # macOS .dmg
 ├── macos/        # macOS .app
 ├── nsis/         # Windows .exe
