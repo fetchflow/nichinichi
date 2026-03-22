@@ -28,6 +28,7 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
   const [selectedModel, setSelectedModel] = useState("");
   const [history, setHistory] = useState<AiConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [loadedConv, setLoadedConv] = useState<AiConversationSummary | null>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState("");
@@ -95,6 +96,7 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
         filePath: conv.file_path,
       });
       onLoad(loaded);
+      setLoadedConv(conv);
       setShowHistory(false);
     } catch {
       // ignore load errors
@@ -124,6 +126,8 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
     if (title && title !== conv.query) {
       await invoke("retitle_ai_conversation_cmd", { filePath: conv.file_path, title }).catch(() => {});
       refreshHistory();
+      // Keep the pinned title in sync if this is the active conversation
+      if (loadedConv?.id === conv.id) setLoadedConv({ ...conv, query: title });
     }
     setRenamingId(null);
   };
@@ -152,7 +156,7 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
         </div>
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => { onClear(); setShowHistory(false); inputRef.current?.focus(); }}
+            onClick={() => { onClear(); setLoadedConv(null); setShowHistory(false); inputRef.current?.focus(); }}
             title="New chat"
             className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
@@ -263,7 +267,7 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
           {messages.length > 0 && (
             <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300 leading-snug line-clamp-2">
-                {messages.find((m) => m.role === "user")?.content ?? ""}
+                {loadedConv?.query ?? messages.find((m) => m.role === "user")?.content ?? ""}
               </p>
             </div>
           )}
