@@ -4,22 +4,21 @@ import { TYPE_COLORS, TYPE_ORDER } from "../../types";
 
 interface Props {
   onSubmit: (text: string) => Promise<unknown>;
+  workspaces: string[];
 }
 
-export function EntryComposer({ onSubmit }: Props) {
+export function EntryComposer({ onSubmit, workspaces }: Props) {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   type CustomTag = { name: string; color: string };
-  const [workspaces, setWorkspaces] = useState<string[]>([]);
   const [customTags, setCustomTags] = useState<CustomTag[]>([]);
 
   useEffect(() => {
     invoke<Record<string, string>>("get_settings")
       .then((s) => {
         try { setCustomTags(JSON.parse(s["custom_tags"] ?? "[]")); } catch { /* noop */ }
-        try { setWorkspaces(JSON.parse(s["workspaces"] ?? "[]")); } catch { /* noop */ }
       })
       .catch(() => {});
   }, []);

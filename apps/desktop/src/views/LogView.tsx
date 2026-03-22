@@ -6,6 +6,7 @@ import type { Entry } from "../types";
 
 interface Props {
   activeOrg: string;
+  workspaces: string[];
 }
 
 function formatDateHeader(dateStr: string): string {
@@ -19,7 +20,7 @@ function formatDateHeader(dateStr: string): string {
   });
 }
 
-export function LogView({ activeOrg }: Props) {
+export function LogView({ activeOrg, workspaces }: Props) {
   const { entries, loading, addEntry } = useEntries(undefined, activeOrg);
 
   const groups = entries.reduce<{ date: string; items: Entry[] }[]>((acc, e) => {
@@ -31,7 +32,7 @@ export function LogView({ activeOrg }: Props) {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      <EntryComposer onSubmit={addEntry} />
+      <EntryComposer onSubmit={addEntry} workspaces={workspaces} />
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="p-4">

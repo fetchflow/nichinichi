@@ -35,7 +35,7 @@ function relativeTime(date: Date): string {
 export default function App() {
   const [section, setSection] = useState<Section>("dashboard");
   const { theme, setTheme } = useTheme();
-  const { activeOrg, setActiveOrg, orgs } = useOrg();
+  const { activeOrg, setActiveOrg, orgs, workspaces, setWorkspaces } = useOrg();
   const ai = useAi();
   const sync = useSyncStatus();
 
@@ -127,7 +127,7 @@ export default function App() {
             {section === "dashboard" && (
               <DashboardView activeOrg={activeOrg} />
             )}
-            {section === "log" && <LogView activeOrg={activeOrg} />}
+            {section === "log" && <LogView activeOrg={activeOrg} workspaces={workspaces} />}
             {section === "goals" && <GoalsView activeOrg={activeOrg} />}
             {section === "playbooks" && (
               <PlaybooksView activeOrg={activeOrg} />
@@ -139,6 +139,8 @@ export default function App() {
                 onThemeChange={setTheme}
                 syncNow={sync.syncNow}
                 syncing={sync.syncing}
+                workspaces={workspaces}
+                onWorkspacesChange={setWorkspaces}
               />
             )}
           </div>

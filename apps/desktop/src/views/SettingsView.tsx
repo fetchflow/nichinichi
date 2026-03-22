@@ -10,9 +10,11 @@ interface Props {
   onThemeChange: (t: Theme) => void;
   syncNow: () => Promise<void>;
   syncing: boolean;
+  workspaces: string[];
+  onWorkspacesChange: (ws: string[]) => void;
 }
 
-export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) {
+export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspaces, onWorkspacesChange }: Props) {
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -57,7 +59,6 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
   // Tags & workspaces
   type CustomTag = { name: string; color: string };
   const [customTags, setCustomTags] = useState<CustomTag[]>([]);
-  const [workspaces, setWorkspaces] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [newTagColor, setNewTagColor] = useState("#6366f1");
   const [newWorkspace, setNewWorkspace] = useState("");
@@ -70,17 +71,12 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
   useEffect(() => {
     invoke<Record<string, string>>("get_settings").then((s) => {
       try { setCustomTags(JSON.parse(s["custom_tags"] ?? "[]")); } catch { /* noop */ }
-      try { setWorkspaces(JSON.parse(s["workspaces"] ?? "[]")); } catch { /* noop */ }
     }).catch(() => {});
   }, []);
 
   const saveTags = (tags: CustomTag[]) => {
     setCustomTags(tags);
     invoke("set_setting", { key: "custom_tags", value: JSON.stringify(tags) });
-  };
-  const saveWorkspaces = (ws: string[]) => {
-    setWorkspaces(ws);
-    invoke("set_setting", { key: "workspaces", value: JSON.stringify(ws) });
   };
 
   const addTag = (e: FormEvent) => {
@@ -95,7 +91,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
     e.preventDefault();
     const w = newWorkspace.trim().toLowerCase().replace(/\s+/g, "-");
     if (!w || workspaces.includes(w)) return;
-    saveWorkspaces([...workspaces, w]);
+    onWorkspacesChange([...workspaces, w]);
     setNewWorkspace("");
   };
 
@@ -113,7 +109,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
     if (w && w !== workspaces[i]) {
       const next = [...workspaces];
       next[i] = w;
-      saveWorkspaces(next);
+      onWorkspacesChange(next);
     }
     setEditingWorkspace(null);
   };
@@ -458,7 +454,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
                 )}
                 <button
                   type="button"
-                  onClick={() => saveWorkspaces(workspaces.filter((_, j) => j !== i))}
+                  onClick={() => onWorkspacesChange(workspaces.filter((_, j) => j !== i))}
                   className="text-xs text-gray-400 hover:text-red-400 transition-colors"
                 >
                   remove
