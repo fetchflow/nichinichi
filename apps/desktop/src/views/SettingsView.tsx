@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import type { Theme } from "../hooks/useTheme";
 import { useTimezone, systemTimezone } from "../hooks/useTimezone";
 
@@ -9,9 +10,11 @@ interface Props {
   onThemeChange: (t: Theme) => void;
   syncNow: () => Promise<void>;
   syncing: boolean;
+  workspaces: string[];
+  onWorkspacesChange: (ws: string[]) => void;
 }
 
-export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) {
+export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspaces, onWorkspacesChange }: Props) {
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -51,6 +54,64 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
     } finally {
       setSavingRepo(false);
     }
+  };
+
+  // Tags & workspaces
+  type CustomTag = { name: string; color: string };
+  const [customTags, setCustomTags] = useState<CustomTag[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#6366f1");
+  const [newWorkspace, setNewWorkspace] = useState("");
+  const [editingTag, setEditingTag] = useState<number | null>(null);
+  const [editingWorkspace, setEditingWorkspace] = useState<number | null>(null);
+  const [editTagVal, setEditTagVal] = useState("");
+  const [editTagColor, setEditTagColor] = useState("");
+  const [editWorkspaceVal, setEditWorkspaceVal] = useState("");
+
+  useEffect(() => {
+    invoke<Record<string, string>>("get_settings").then((s) => {
+      try { setCustomTags(JSON.parse(s["custom_tags"] ?? "[]")); } catch { /* noop */ }
+    }).catch(() => {});
+  }, []);
+
+  const saveTags = (tags: CustomTag[]) => {
+    setCustomTags(tags);
+    invoke("set_setting", { key: "custom_tags", value: JSON.stringify(tags) });
+  };
+
+  const addTag = (e: FormEvent) => {
+    e.preventDefault();
+    const name = newTag.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!name || customTags.some((t) => t.name === name)) return;
+    saveTags([...customTags, { name, color: newTagColor }]);
+    setNewTag("");
+    setNewTagColor("#6366f1");
+  };
+  const addWorkspace = (e: FormEvent) => {
+    e.preventDefault();
+    const w = newWorkspace.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!w || workspaces.includes(w)) return;
+    onWorkspacesChange([...workspaces, w]);
+    setNewWorkspace("");
+  };
+
+  const commitTagEdit = (i: number) => {
+    const name = editTagVal.trim().toLowerCase().replace(/\s+/g, "-");
+    if (name) {
+      const next = [...customTags];
+      next[i] = { name, color: editTagColor };
+      saveTags(next);
+    }
+    setEditingTag(null);
+  };
+  const commitWorkspaceEdit = (i: number) => {
+    const w = editWorkspaceVal.trim().toLowerCase().replace(/\s+/g, "-");
+    if (w && w !== workspaces[i]) {
+      const next = [...workspaces];
+      next[i] = w;
+      onWorkspacesChange(next);
+    }
+    setEditingWorkspace(null);
   };
 
   // Admin gate — click "Data" heading 5× rapidly to reveal danger zone
@@ -280,6 +341,151 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
             </button>
           </div>
         )}
+      </section>
+      {/* Tags & Project Spaces */}
+      <section>
+        <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Tags &amp; Workspaces</h2>
+
+        {/* Tags */}
+        <div className="mb-5">
+          <p className="text-xs text-gray-500 mb-2">Tags</p>
+          <div className="space-y-1 mb-2">
+            {customTags.map((tag, i) => (
+              <div key={i} className="flex items-center gap-2">
+                {editingTag === i ? (
+                  <>
+                    <input
+                      type="color"
+                      value={editTagColor}
+                      onChange={(e) => setEditTagColor(e.target.value)}
+                      className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent p-0"
+                      title="Pick a color"
+                    />
+                    <input
+                      autoFocus
+                      value={editTagVal}
+                      onChange={(e) => setEditTagVal(e.target.value)}
+                      onBlur={() => commitTagEdit(i)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); commitTagEdit(i); }
+                        if (e.key === "Escape") setEditingTag(null);
+                      }}
+                      className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                                 border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: tag.color }}
+                    />
+                    <span
+                      className="flex-1 text-sm font-mono cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ color: tag.color }}
+                      onClick={() => { setEditingTag(i); setEditTagVal(tag.name); setEditTagColor(tag.color); }}
+                    >
+                      #{tag.name}
+                    </span>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => saveTags(customTags.filter((_, j) => j !== i))}
+                  className="text-xs text-gray-400 hover:text-red-400 transition-colors"
+                >
+                  remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={addTag} className="flex gap-2">
+            <input
+              type="color"
+              value={newTagColor}
+              onChange={(e) => setNewTagColor(e.target.value)}
+              className="w-8 h-8 rounded cursor-pointer border border-gray-300 dark:border-gray-700 bg-transparent p-0.5"
+              title="Pick a color"
+            />
+            <input
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              placeholder="new-tag"
+              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                         border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+            />
+            <button
+              type="submit"
+              disabled={!newTag.trim()}
+              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40
+                         text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+            >
+              Add
+            </button>
+          </form>
+        </div>
+
+        {/* Workspaces */}
+        <div>
+          <p className="text-xs text-gray-500 mb-2">Workspaces</p>
+          <div className="space-y-1 mb-2">
+            {workspaces.map((ws, i) => (
+              <div key={i} className="flex items-center gap-2">
+                {editingWorkspace === i ? (
+                  <input
+                    autoFocus
+                    value={editWorkspaceVal}
+                    onChange={(e) => setEditWorkspaceVal(e.target.value)}
+                    onBlur={() => commitWorkspaceEdit(i)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); commitWorkspaceEdit(i); }
+                      if (e.key === "Escape") setEditingWorkspace(null);
+                    }}
+                    className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                               border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+                  />
+                ) : (
+                  <span
+                    className="flex-1 text-sm font-mono text-gray-700 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-gray-100"
+                    onClick={() => { setEditingWorkspace(i); setEditWorkspaceVal(ws); }}
+                  >
+                    @{ws}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onWorkspacesChange(workspaces.filter((_, j) => j !== i))}
+                  className="text-xs text-gray-400 hover:text-red-400 transition-colors"
+                >
+                  remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={addWorkspace} className="flex gap-2">
+            <input
+              value={newWorkspace}
+              onChange={(e) => setNewWorkspace(e.target.value)}
+              placeholder="workspace-name"
+              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                         border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+            />
+            <button
+              type="submit"
+              disabled={!newWorkspace.trim()}
+              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40
+                         text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+            >
+              Add
+            </button>
+          </form>
+          <p className="text-xs text-gray-400 dark:text-gray-600 mt-2">
+            Workspace names appear as @org chips in the log composer.
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
+            Built-in tags (score, solution, decision, ai, reflection, log) are always available.
+          </p>
+        </div>
       </section>
     </div>
   );

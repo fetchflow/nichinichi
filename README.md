@@ -14,7 +14,9 @@ Log daily work from the CLI or desktop app. All data lives as plain markdown fil
 - **AI assistant** — ask questions about your own work history using your Anthropic API key
 - **Goals tracking** — step-by-step goal files with progress signals; steps and progress are editable in the desktop UI with write-back to markdown; progress entries can reference specific log entries via `refs:`
 - **Playbooks** — reusable runbooks stored as markdown; create, edit (split editor with live preview), and delete from the desktop UI
-- **Org filtering** — scope entries and AI queries to a project or client
+- **Composer chip toolbar** — clickable chips for entry types (`#score`, `#solution`, etc.), custom tags, and workspaces (`@acme`) below the log input; clicking inserts the token at cursor
+- **Tags & Workspaces** — create custom tags (with color) and workspaces in Settings; tags appear in the composer chip row alongside built-in types; workspace names appear in both the composer and the org switcher
+- **Org filtering** — scope entries and AI queries to a project or client; the sidebar switcher merges explicit workspaces with orgs discovered from entries
 - **Private entries** — `.quiet/` files are never indexed or sent to AI
 - **Git-native backup** — commit and push `~/devlog/` to your own private remote
 
@@ -82,7 +84,7 @@ pnpm tauri build   # production .app / .exe
 
 ## Configuration
 
-DevLog reads `~/.devlog.yml` on startup. The desktop Settings UI writes to this file automatically.
+DevLog reads `~/.devlog.yml` on startup. The desktop Settings UI writes to this file automatically. Settings includes a **Browse** button to pick the devlog folder with a native directory picker, and a **Tags & Workspaces** section to manage custom tags (with color) and workspace names.
 
 ```yaml
 repo: ~/devlog        # where your markdown files live
