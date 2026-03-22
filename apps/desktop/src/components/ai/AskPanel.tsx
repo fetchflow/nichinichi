@@ -108,6 +108,19 @@ export function AskPanel({ messages, streaming, onAsk, onSave, onClear, onClose 
             </div>
           </div>
         ))}
+
+        {/* Typing indicator — shown while waiting for the first chunk */}
+        {streaming && messages[messages.length - 1]?.role === "user" && (
+          <div className="flex gap-1 px-1 py-1">
+            {[0, 150, 300].map((delay) => (
+              <span
+                key={delay}
+                className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-600 rounded-full animate-bounce"
+                style={{ animationDelay: `${delay}ms` }}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Input */}
