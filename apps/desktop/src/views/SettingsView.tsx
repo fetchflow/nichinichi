@@ -346,9 +346,9 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
       <section>
         <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Tags &amp; Project Spaces</h2>
 
-        {/* Custom tags */}
+        {/* Tags */}
         <div className="mb-5">
-          <p className="text-xs text-gray-500 mb-2">Custom tags</p>
+          <p className="text-xs text-gray-500 mb-2">Tags</p>
           <div className="space-y-1 mb-2">
             {customTags.map((tag, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -458,6 +458,9 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
           </form>
           <p className="text-xs text-gray-400 dark:text-gray-600 mt-2">
             Orgs from existing entries also appear in the composer automatically.
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
+            Built-in tags (score, solution, decision, ai, reflection, log) are always available.
           </p>
         </div>
       </section>

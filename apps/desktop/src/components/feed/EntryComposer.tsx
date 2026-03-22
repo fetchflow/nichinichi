@@ -86,8 +86,8 @@ export function EntryComposer({ onSubmit }: Props) {
 
       {/* Chip toolbar */}
       <div className="mt-2 space-y-1.5">
-        {/* Entry types */}
-        <ChipRow label="type">
+        {/* Tags (built-in types + custom tags) */}
+        <ChipRow label="tags">
           {TYPE_ORDER.map((t) => (
             <Chip
               key={t}
@@ -96,16 +96,10 @@ export function EntryComposer({ onSubmit }: Props) {
               color={TYPE_COLORS[t]}
             />
           ))}
+          {customTags.map((tag) => (
+            <Chip key={tag} label={tag} onClick={() => insertToken(`#${tag}`)} />
+          ))}
         </ChipRow>
-
-        {/* Custom tags */}
-        {customTags.length > 0 && (
-          <ChipRow label="tags">
-            {customTags.map((tag) => (
-              <Chip key={tag} label={tag} onClick={() => insertToken(`#${tag}`)} />
-            ))}
-          </ChipRow>
-        )}
 
         {/* Orgs */}
         {orgs.length > 0 && (
