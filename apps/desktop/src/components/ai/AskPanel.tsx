@@ -258,19 +258,22 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
         </div>
       ) : (
         /* Messages */
-        <div className="flex-1 overflow-y-auto">
+        <>
+          {/* Conversation title — pinned above scroll area */}
+          {messages.length > 0 && (
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 leading-snug line-clamp-2">
+                {messages.find((m) => m.role === "user")?.content ?? ""}
+              </p>
+            </div>
+          )}
+          <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <p className="text-xs text-gray-400 dark:text-gray-600 text-center mt-12 px-4">
               Ask a question about your journal.
             </p>
           ) : (
             <>
-              {/* Conversation title — first user message */}
-              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 leading-snug line-clamp-2">
-                  {messages.find((m) => m.role === "user")?.content ?? ""}
-                </p>
-              </div>
               {messages.map((msg, i) => (
               <div
                 key={i}
@@ -330,6 +333,7 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
           )}
           <div ref={messagesEndRef} />
         </div>
+        </>
       )}
 
       {/* Input */}
