@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { AiMessage } from "../../hooks/useAi";
 
 interface AiConversationSummary {
@@ -29,7 +31,7 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,13 +58,28 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
       .catch(() => {});
   }, [activeOrg]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
     const q = input.trim();
     if (!q || streaming) return;
     setShowHistory(false);
     onAsk(q, selectedModel);
     setInput("");
+    // reset textarea height
+    if (inputRef.current) inputRef.current.style.height = "auto";
+  };
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
   };
 
   const refreshHistory = () => {
@@ -114,13 +131,30 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
   return (
     <div className="flex flex-col h-full border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Ask Nichinichi</span>
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold tracking-wide text-gray-500 dark:text-gray-400 uppercase">
+            Nichinichi
+          </span>
+          {models.length > 0 && (
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              disabled={streaming}
+              className="bg-transparent text-xs text-gray-400 dark:text-gray-500 border-none focus:outline-none
+                         disabled:opacity-50 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            >
+              {models.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => { onClear(); setShowHistory(false); inputRef.current?.focus(); }}
             title="New chat"
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
+            className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 5v14M5 12h14" />
@@ -130,10 +164,10 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
             <button
               onClick={() => setShowHistory((v) => !v)}
               title={showHistory ? "Back to chat" : "Past conversations"}
-              className={`transition-colors ${
+              className={`p-1 rounded transition-colors ${
                 showHistory
-                  ? "text-amber-500"
-                  : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-400"
+                  ? "text-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                  : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
               }`}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -144,8 +178,8 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
           )}
           <button
             onClick={onClose}
-            title="Close AI panel"
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
+            title="Close"
+            className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -154,23 +188,6 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
           </button>
         </div>
       </div>
-
-      {/* Model selector */}
-      {models.length > 0 && (
-        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            disabled={streaming}
-            className="w-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs rounded px-2 py-1.5
-                       border border-gray-300 dark:border-gray-700 focus:outline-none disabled:opacity-50"
-          >
-            {models.map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {/* History list */}
       {showHistory ? (
@@ -226,27 +243,9 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
                                        dark:border-gray-700 rounded shadow-lg text-sm overflow-hidden"
                             onMouseLeave={() => setMenuOpen(null)}
                           >
-                            <button
-                              onClick={() => handleRenameStart(conv)}
-                              className="w-full text-left px-3 py-2 text-gray-700 dark:text-gray-300
-                                         hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                            >
-                              Rename
-                            </button>
-                            <button
-                              onClick={() => handleArchive(conv)}
-                              className="w-full text-left px-3 py-2 text-gray-700 dark:text-gray-300
-                                         hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                            >
-                              Archive
-                            </button>
-                            <button
-                              onClick={() => handleDelete(conv)}
-                              className="w-full text-left px-3 py-2 text-red-500
-                                         hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                            >
-                              Delete
-                            </button>
+                            <button onClick={() => handleRenameStart(conv)} className="w-full text-left px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Rename</button>
+                            <button onClick={() => handleArchive(conv)} className="w-full text-left px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Archive</button>
+                            <button onClick={() => handleDelete(conv)} className="w-full text-left px-3 py-2 text-red-500 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Delete</button>
                           </div>
                         )}
                       </div>
@@ -259,39 +258,66 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
         </div>
       ) : (
         /* Messages */
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 && (
-            <p className="text-xs text-gray-400 dark:text-gray-600 text-center mt-8">
+        <div className="flex-1 overflow-y-auto">
+          {messages.length === 0 ? (
+            <p className="text-xs text-gray-400 dark:text-gray-600 text-center mt-12 px-4">
               Ask a question about your journal.
             </p>
-          )}
-          {messages.map((msg, i) => (
-            <div key={i} className={msg.role === "user" ? "text-right" : ""}>
+          ) : (
+            messages.map((msg, i) => (
               <div
-                className={`inline-block text-sm px-3 py-2 rounded-lg max-w-[90%] text-left whitespace-pre-wrap leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                key={i}
+                className={`px-4 py-4 border-b border-gray-100 dark:border-gray-800/60 ${
+                  msg.role === "user" ? "bg-gray-50 dark:bg-gray-800/40" : ""
                 }`}
               >
-                {msg.content}
-                {streaming && i === messages.length - 1 && msg.role === "assistant" && (
-                  <span className="inline-block w-1 h-3.5 bg-gray-400 ml-0.5 animate-pulse" />
+                <p className={`text-[11px] font-semibold uppercase tracking-wider mb-2 ${
+                  msg.role === "user"
+                    ? "text-gray-400 dark:text-gray-500"
+                    : "text-amber-600 dark:text-amber-500"
+                }`}>
+                  {msg.role === "user" ? "You" : "Nichinichi"}
+                </p>
+                {msg.role === "assistant" ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none
+                                  prose-p:leading-relaxed prose-p:my-1.5
+                                  prose-pre:bg-gray-100 dark:prose-pre:bg-gray-800 prose-pre:rounded prose-pre:text-xs
+                                  prose-code:text-xs prose-code:bg-gray-100 dark:prose-code:bg-gray-800
+                                  prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
+                                  prose-headings:font-semibold prose-headings:my-2
+                                  prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5
+                                  text-gray-800 dark:text-gray-200">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                    {streaming && i === messages.length - 1 && (
+                      <span className="inline-block w-1.5 h-3.5 bg-amber-500 ml-0.5 animate-pulse align-middle" />
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+                    {msg.content}
+                  </p>
                 )}
               </div>
-            </div>
-          ))}
+            ))
+          )}
 
-          {/* Typing indicator — shown while waiting for the first chunk */}
+          {/* Typing indicator */}
           {streaming && messages[messages.length - 1]?.role === "user" && (
-            <div className="flex gap-1 px-1 py-1">
-              {[0, 150, 300].map((delay) => (
-                <span
-                  key={delay}
-                  className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-600 rounded-full animate-bounce"
-                  style={{ animationDelay: `${delay}ms` }}
-                />
-              ))}
+            <div className="px-4 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider mb-3 text-amber-600 dark:text-amber-500">
+                Nichinichi
+              </p>
+              <div className="flex gap-1">
+                {[0, 150, 300].map((delay) => (
+                  <span
+                    key={delay}
+                    className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-600 rounded-full animate-bounce"
+                    style={{ animationDelay: `${delay}ms` }}
+                  />
+                ))}
+              </div>
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -299,28 +325,35 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
       )}
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="p-3 border-t border-gray-200 dark:border-gray-800">
-        <div className="flex gap-2">
-          <input
+      <div className="p-3 border-t border-gray-200 dark:border-gray-800">
+        <div className="relative rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800
+                        focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors">
+          <textarea
             ref={inputRef}
+            rows={1}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about your work history..."
+            onChange={handleTextareaChange}
+            onKeyDown={handleKeyDown}
+            placeholder="Message… (Enter to send, Shift+Enter for newline)"
             disabled={streaming}
-            className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
-                       placeholder-gray-400 dark:placeholder-gray-600 border border-gray-300 dark:border-gray-700 focus:outline-none
-                       focus:border-gray-400 dark:focus:border-gray-500 transition-colors"
+            className="w-full resize-none bg-transparent text-sm text-gray-800 dark:text-gray-200
+                       placeholder-gray-400 dark:placeholder-gray-600 px-3 pt-2.5 pb-8
+                       focus:outline-none disabled:opacity-50 leading-relaxed"
           />
           <button
-            type="submit"
+            onClick={() => handleSubmit()}
             disabled={!input.trim() || streaming}
-            className="px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40
-                       text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+            className="absolute bottom-2 right-2 p-1 rounded bg-gray-200 dark:bg-gray-700
+                       hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-30
+                       text-gray-700 dark:text-gray-300 transition-colors"
           >
-            Ask
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
           </button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
