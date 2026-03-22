@@ -29,7 +29,7 @@ export function EntryComposer({ onSubmit }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-3 border-b border-gray-800">
+    <form onSubmit={handleSubmit} className="p-3 border-b border-gray-200 dark:border-gray-800">
       <div className="flex gap-2">
         <input
           type="text"
@@ -37,21 +37,21 @@ export function EntryComposer({ onSubmit }: Props) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="What are you working on? @org #type"
-          className="flex-1 bg-gray-800 text-gray-200 text-sm rounded px-3 py-2
-                     placeholder-gray-600 border border-gray-700 focus:outline-none
-                     focus:border-gray-500 transition-colors"
+          className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
+                     placeholder-gray-400 dark:placeholder-gray-600 border border-gray-300 dark:border-gray-700 focus:outline-none
+                     focus:border-gray-400 dark:focus:border-gray-500 transition-colors"
           disabled={submitting}
         />
         <button
           type="submit"
           disabled={!text.trim() || submitting}
-          className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-40
-                     text-gray-200 text-sm rounded transition-colors"
+          className="px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40
+                     text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
         >
           Log
         </button>
       </div>
-      <p className="text-xs text-gray-600 mt-1.5 px-1">
+      <p className="text-xs text-gray-400 dark:text-gray-600 mt-1.5 px-1">
         Enter to submit · Shift+Enter for newline
       </p>
     </form>

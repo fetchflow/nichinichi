@@ -20,7 +20,7 @@ export function Heatmap({ cells, weeks = 26 }: Props) {
   const maxCount = Math.max(...cells.map((c) => c.count), 1);
 
   const colorFor = (count: number) => {
-    if (count === 0) return "#1f2937"; // gray-800
+    if (count === 0) return "var(--c-surface-2)";
     const intensity = Math.min(count / maxCount, 1);
     if (intensity < 0.25) return "#14532d";
     if (intensity < 0.5) return "#166534";

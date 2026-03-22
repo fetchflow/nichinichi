@@ -1,7 +1,7 @@
 export function SkeletonRow({ width = "100%" }: { width?: string }) {
   return (
     <div
-      className="h-4 rounded bg-gray-700 animate-pulse"
+      className="h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse"
       style={{ width }}
     />
   );

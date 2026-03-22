@@ -20,7 +20,7 @@ export function LogView({ activeOrg }: Props) {
           </div>
         ) : entries.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-400 dark:text-gray-600">
               No entries yet. Log something above.
             </p>
           </div>
