@@ -82,21 +82,22 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onSave, onClea
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Ask Nichinichi</span>
         <div className="flex items-center gap-2">
           {messages.length > 0 && !showHistory && (
-            <>
-              <button
-                onClick={onSave}
-                className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-              >
-                save
-              </button>
-              <button
-                onClick={onClear}
-                className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-              >
-                clear
-              </button>
-            </>
+            <button
+              onClick={onSave}
+              className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+            >
+              save
+            </button>
           )}
+          <button
+            onClick={() => { onClear(); setShowHistory(false); inputRef.current?.focus(); }}
+            title="New chat"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
           {history.length > 0 && (
             <button
               onClick={() => setShowHistory((v) => !v)}
