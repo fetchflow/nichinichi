@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import type { Theme } from "../hooks/useTheme";
 import { useTimezone, systemTimezone } from "../hooks/useTimezone";
@@ -29,6 +30,11 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
   useEffect(() => {
     invoke<string>("get_config_repo").then(setRepoPath).catch(() => {});
   }, []);
+
+  const handleBrowse = async () => {
+    const selected = await openDialog({ directory: true, multiple: false });
+    if (typeof selected === "string") setRepoPath(selected);
+  };
 
   const handleSaveRepo = async () => {
     if (!repoPath.trim()) return;
@@ -206,6 +212,13 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
                 className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
                            border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
               />
+              <button
+                onClick={handleBrowse}
+                className="px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600
+                           text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+              >
+                Browse
+              </button>
               <button
                 onClick={handleSaveRepo}
                 disabled={!repoPath.trim() || savingRepo}
