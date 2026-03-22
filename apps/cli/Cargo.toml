@@ -1,17 +1,17 @@
 [package]
-name = "devlog-cli"
+name = "nichinichi-cli"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "devlog"
+name = "nichinichi"
 path = "src/main.rs"
 
 [dependencies]
-devlog-types  = { workspace = true }
-devlog-parser = { workspace = true }
-devlog-sync   = { workspace = true }
-devlog-ai     = { workspace = true }
+nichinichi-types  = { workspace = true }
+nichinichi-parser = { workspace = true }
+nichinichi-sync   = { workspace = true }
+nichinichi-ai     = { workspace = true }
 clap          = { workspace = true }
 colored       = { workspace = true }
 anyhow        = { workspace = true }

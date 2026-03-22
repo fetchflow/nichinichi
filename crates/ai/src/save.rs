@@ -2,7 +2,7 @@ use crate::AiError;
 use chrono::Local;
 use std::path::{Path, PathBuf};
 
-/// Save an AI conversation to `~/devlog/ai/YYYY-MM-DD-{slug}.md`.
+/// Save an AI conversation to `~/nichinichi/ai/YYYY-MM-DD-{slug}.md`.
 /// The file watcher picks it up and indexes it into SQLite automatically.
 pub async fn save_conversation(
     repo: &Path,
@@ -23,7 +23,7 @@ pub async fn save_conversation(
     let org_str = org.unwrap_or("null");
     let content = format!(
         "---\ntype: ai-conversation\ndate: {today}\nquery: {query}\norg: {org_str}\n---\n\n\
-         **you:** {query}\n\n**devlog:** {response}\n"
+         **you:** {query}\n\n**nichinichi:** {response}\n"
     );
 
     let path = dir.join(&filename);

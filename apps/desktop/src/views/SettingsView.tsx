@@ -192,7 +192,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
               </button>
             </div>
             <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
-              Saved to ~/.devlog.yml · never sent anywhere else
+              Saved to ~/.nichinichi.yml · never sent anywhere else
             </p>
           </div>
         </div>
@@ -273,7 +273,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
                 type="text"
                 value={repoPath}
                 onChange={(e) => setRepoPath(e.target.value)}
-                placeholder="~/devlog"
+                placeholder="~/nichinichi"
                 className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
                            border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
               />
@@ -295,7 +295,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
             </div>
             {restartNeeded && (
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                Restart DevLog to load the new folder.
+                Restart Nichinichi to load the new folder.
               </p>
             )}
           </div>

@@ -21,7 +21,7 @@ pub enum SyncError {
     #[error("migration error: {0}")]
     Migration(#[from] sqlx::migrate::MigrateError),
     #[error("parser error: {0}")]
-    Parser(#[from] devlog_parser::ParseError),
+    Parser(#[from] nichinichi_parser::ParseError),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[error("watcher error: {0}")]

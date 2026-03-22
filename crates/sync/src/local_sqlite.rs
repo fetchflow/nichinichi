@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use devlog_types::{AiConversation, Config, Digest, Goal, ParsedEntry, Playbook};
+use nichinichi_types::{AiConversation, Config, Digest, Goal, ParsedEntry, Playbook};
 use serde_json;
 use sqlx::SqlitePool;
 

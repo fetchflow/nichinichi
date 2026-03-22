@@ -18,7 +18,7 @@ compounding.
 - Redis session cache implementation
 - Permissions system design and initial implementation
 - Billing page (personal — Stripe integration)
-- devlog CLI and desktop app — full implementation across 10 phases
+- nichinichi CLI and desktop app — full implementation across 10 phases
 
 ## Decisions
 
@@ -28,7 +28,7 @@ from January — the quality of decision logging improved significantly by March
 Most impactful decisions this quarter:
 - resource:action permission pairs over bitmasks (shapes entire access control model)
 - Redis over Postgres for session cache (performance and TTL ergonomics)
-- Markdown as source of truth for devlog (SQLite always reconstructable)
+- Markdown as source of truth for nichinichi (SQLite always reconstructable)
 
 ## Learning and reflection
 

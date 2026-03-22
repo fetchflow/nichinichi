@@ -1,5 +1,5 @@
 use crate::ParseError;
-use devlog_types::{
+use nichinichi_types::{
     Goal, GoalProgress, GoalStatus, GoalStep, GoalStepStatus, GoalType, ProgressSignal,
 };
 use sha2::{Digest, Sha256};
@@ -258,7 +258,7 @@ created: 2026-01-05
 - [x] mentor a junior through a full feature end to end
       notes: David's auth PR — Mar 2026
 - [ ] lead a cross-team technical initiative
-      notes: devlog platform counts — spans 3 projects
+      notes: nichinichi platform counts — spans 3 projects
 - [ ] write and publish a technical design doc
       due: 2026-06-01
 

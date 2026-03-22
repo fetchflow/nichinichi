@@ -1,5 +1,5 @@
 use crate::ParseError;
-use devlog_types::{AiConversation, Digest, DigestType};
+use nichinichi_types::{AiConversation, Digest, DigestType};
 use sha2::{Digest as _, Sha256};
 use std::path::Path;
 
@@ -143,7 +143,7 @@ org: acme
 
 **you:** when did i fix a jwt bug
 
-**devlog:** Based on your entries: jwt refresh bug fixed March 17...
+**nichinichi:** Based on your entries: jwt refresh bug fixed March 17...
 "#;
 
     #[test]

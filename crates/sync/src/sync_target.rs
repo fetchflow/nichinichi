@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use devlog_types::{AiConversation, Digest, Goal, ParsedEntry, Playbook};
+use nichinichi_types::{AiConversation, Digest, Goal, ParsedEntry, Playbook};
 
 use crate::SyncError;
 
@@ -13,5 +13,5 @@ pub trait SyncTarget: Send + Sync {
     async fn upsert_digest(&self, digest: &Digest) -> Result<(), SyncError>;
     async fn upsert_ai_conversation(&self, ai: &AiConversation) -> Result<(), SyncError>;
     async fn delete_entry(&self, id: &str) -> Result<(), SyncError>;
-    async fn rebuild(&self, repo: &std::path::Path, config: &devlog_types::Config) -> Result<(), SyncError>;
+    async fn rebuild(&self, repo: &std::path::Path, config: &nichinichi_types::Config) -> Result<(), SyncError>;
 }

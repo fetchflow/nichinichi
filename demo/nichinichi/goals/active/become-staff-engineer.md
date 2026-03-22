@@ -14,7 +14,7 @@ created: 2026-01-05
 - [x] mentor a junior through a full feature end to end
       notes: David's auth PR — Mar 2026. He drove the design, I reviewed and guided.
 - [x] lead a cross-team technical initiative
-      notes: permissions system spans acme API, mobile, and devlog platform — 3 teams.
+      notes: permissions system spans acme API, mobile, and nichinichi platform — 3 teams.
 - [x] write and publish a technical design doc reviewed by senior leadership
       notes: permissions doc drafted, sent to Maria for review
       due: 2026-04-15

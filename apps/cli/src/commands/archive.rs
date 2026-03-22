@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::Local;
 use colored::Colorize;
-use devlog_types::Config;
+use nichinichi_types::Config;
 use std::io::{self, BufRead, Write};
 
 pub async fn run(config: &Config, year: Option<u32>, yes: bool) -> Result<()> {

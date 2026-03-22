@@ -1,6 +1,6 @@
 # File Formats
 
-All user data lives as plain markdown files in `~/devlog/`. The SQLite
+All user data lives as plain markdown files in `~/nichinichi/`. The SQLite
 database is always reconstructable from these files.
 
 ## Daily entry file (`YYYY-MM-DD.md`)
@@ -65,7 +65,7 @@ created: 2026-01-05
 - [x] mentor a junior through a full feature end to end
       notes: David's auth PR — Mar 2026
 - [ ] lead a cross-team technical initiative
-      notes: devlog platform counts — spans 3 projects
+      notes: nichinichi platform counts — spans 3 projects
 - [ ] write and publish a technical design doc
       due: 2026-06-01
 
@@ -138,13 +138,13 @@ org: acme
 
 **you:** when did i fix a jwt bug
 
-**devlog:** Based on your entries: jwt refresh bug fixed March 17...
+**nichinichi:** Based on your entries: jwt refresh bug fixed March 17...
 ```
 
-## Config file (`~/.devlog.yml`)
+## Config file (`~/.nichinichi.yml`)
 
 ```yaml
-repo: ~/devlog
+repo: ~/nichinichi
 editor: vim
 
 ai:
@@ -157,6 +157,6 @@ default_org: personal
 
 ## Private entries (`.quiet/`)
 
-Files in `~/devlog/.quiet/` are **never** indexed, never sent to AI, and
+Files in `~/nichinichi/.quiet/` are **never** indexed, never sent to AI, and
 never included in sync. This is enforced in the file watcher and rebuild,
 not just the UI.

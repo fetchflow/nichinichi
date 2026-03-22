@@ -24,7 +24,7 @@ export function AskPanel({ messages, streaming, onAsk, onSave, onClear }: Props)
     <div className="flex flex-col h-full border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Ask DevLog</span>
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Ask Nichinichi</span>
         <div className="flex gap-2">
           {messages.length > 0 && (
             <>

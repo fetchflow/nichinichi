@@ -45,7 +45,7 @@ open             = "5"
 urlencoding      = "2"
 
 # internal crates
-devlog-types     = { path = "crates/types" }
-devlog-parser    = { path = "crates/parser" }
-devlog-sync      = { path = "crates/sync" }
-devlog-ai        = { path = "crates/ai" }
+nichinichi-types     = { path = "crates/types" }
+nichinichi-parser    = { path = "crates/parser" }
+nichinichi-sync      = { path = "crates/sync" }
+nichinichi-ai        = { path = "crates/ai" }

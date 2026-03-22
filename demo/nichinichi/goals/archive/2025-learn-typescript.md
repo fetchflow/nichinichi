@@ -15,7 +15,7 @@ completion_date: 2025-12-15
 - [x] complete the TypeScript handbook
       notes: done by April 2025
 - [x] migrate one personal project from JS to strict TypeScript
-      notes: devlog-ui — migrated June 2025. Caught 3 real bugs during migration.
+      notes: nichinichi-ui — migrated June 2025. Caught 3 real bugs during migration.
 - [x] contribute a TypeScript PR to a work codebase with strict mode enabled
       notes: acme billing UI, September 2025. PR reviewed and merged by Maria.
 

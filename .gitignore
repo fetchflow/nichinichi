@@ -3,10 +3,10 @@ target/
 **/*.rs.bk
 Cargo.lock
 
-# DevLog data
-devlog.db
-devlog.db-shm
-devlog.db-wal
+# Nichinichi data
+**/nichinichi.db
+**/nichinichi.db-shm
+**/nichinichi.db-wal
 
 # Node / pnpm
 node_modules/

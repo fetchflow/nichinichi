@@ -1,7 +1,7 @@
 # Demo Data
 
-This directory contains a pre-populated devlog repository for demonstrating all features
-of the DevLog app. It includes realistic entries, goals, playbooks, digests, and saved
+This directory contains a pre-populated nichinichi repository for demonstrating all features
+of the Nichinichi app. It includes realistic entries, goals, playbooks, digests, and saved
 AI conversations — all in the correct markdown format.
 
 ## Setup
@@ -9,27 +9,27 @@ AI conversations — all in the correct markdown format.
 ### Option 1: CLI
 
 ```bash
-# Point devlog at the demo repo
-export DEVLOG_REPO=/absolute/path/to/devlog-mark-02/demo/devlog
+# Point nichinichi at the demo repo
+export NICHINICHI_REPO=/absolute/path/to/nichinichi-mark-02/demo/nichinichi
 
 # Rebuild the SQLite index from the demo files
-cargo run -p devlog-cli -- sync --rebuild
+cargo run -p nichinichi-cli -- sync --rebuild
 
 # Try a query
-cargo run -p devlog-cli -- ask "what decisions did I make about auth"
+cargo run -p nichinichi-cli -- ask "what decisions did I make about auth"
 ```
 
 ### Option 2: Desktop app
 
 1. Open the app and go to **Settings**
-2. Set **Repo path** to the absolute path of `demo/devlog/` in this repository
+2. Set **Repo path** to the absolute path of `demo/nichinichi/` in this repository
 3. Click **Rebuild index**
 4. Navigate to the Dashboard — all data will load
 
-Or set it in `~/.devlog.yml`:
+Or set it in `~/.nichinichi.yml`:
 
 ```yaml
-repo: /absolute/path/to/devlog-mark-02/demo/devlog
+repo: /absolute/path/to/nichinichi-mark-02/demo/nichinichi
 ```
 
 ## What's included
@@ -54,5 +54,5 @@ repo: /absolute/path/to/devlog-mark-02/demo/devlog
 
 ## Returning to your real data
 
-Change `repo:` back to `~/devlog` (or your actual repo path) in `~/.devlog.yml`
+Change `repo:` back to `~/nichinichi` (or your actual repo path) in `~/.nichinichi.yml`
 or the Settings UI, then run **Rebuild index** again.

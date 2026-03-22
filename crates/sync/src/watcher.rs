@@ -1,6 +1,6 @@
 use crate::{local_sqlite::LocalSqlite, sync_target::SyncTarget, SyncError};
-use devlog_parser::{parse_file, ParsedFile};
-use devlog_types::Config;
+use nichinichi_parser::{parse_file, ParsedFile};
+use nichinichi_types::Config;
 use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
 use sqlx::SqlitePool;

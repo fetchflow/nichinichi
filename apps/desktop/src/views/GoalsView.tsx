@@ -254,7 +254,7 @@ export function GoalsView({ activeOrg }: Props) {
       <div className="flex items-center justify-center h-full">
         <p className="text-sm text-gray-400 dark:text-gray-600">
           No goals yet. Use the CLI to add one:
-          <code className="ml-2 text-gray-500">devlog goals add "title"</code>
+          <code className="ml-2 text-gray-500">nichinichi goals add "title"</code>
         </p>
       </div>
     );
