@@ -44,10 +44,11 @@ export function useAi() {
   }, []);
 
   const ask = useCallback(async (query: string, org?: string) => {
+    const history = messages; // capture prior turns before state update
     setMessages((prev) => [...prev, { role: "user", content: query }]);
     setStreaming(true);
     try {
-      await invoke("ai_ask", { query, org: org ?? null });
+      await invoke("ai_ask", { query, history, org: org ?? null });
     } catch (e) {
       setStreaming(false);
       setMessages((prev) => [
@@ -55,7 +56,7 @@ export function useAi() {
         { role: "assistant", content: `Error: ${String(e)}` },
       ]);
     }
-  }, []);
+  }, [messages]);
 
   const save = useCallback(
     async (org?: string) => {
