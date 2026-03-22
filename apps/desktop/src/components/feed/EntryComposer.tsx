@@ -12,23 +12,14 @@ export function EntryComposer({ onSubmit }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   type CustomTag = { name: string; color: string };
-  const [orgs, setOrgs] = useState<string[]>([]);
+  const [workspaces, setWorkspaces] = useState<string[]>([]);
   const [customTags, setCustomTags] = useState<CustomTag[]>([]);
 
   useEffect(() => {
-    invoke<string[]>("get_orgs").then(setOrgs).catch(() => {});
     invoke<Record<string, string>>("get_settings")
       .then((s) => {
-        try {
-          setCustomTags(JSON.parse(s["custom_tags"] ?? "[]"));
-        } catch {
-          setCustomTags([]);
-        }
-        const managedOrgs: string[] = JSON.parse(s["managed_orgs"] ?? "[]");
-        setOrgs((prev) => {
-          const merged = [...new Set([...prev, ...managedOrgs])].sort();
-          return merged;
-        });
+        try { setCustomTags(JSON.parse(s["custom_tags"] ?? "[]")); } catch { /* noop */ }
+        try { setWorkspaces(JSON.parse(s["workspaces"] ?? "[]")); } catch { /* noop */ }
       })
       .catch(() => {});
   }, []);
@@ -102,11 +93,11 @@ export function EntryComposer({ onSubmit }: Props) {
           ))}
         </ChipRow>
 
-        {/* Orgs */}
-        {orgs.length > 0 && (
+        {/* Workspaces */}
+        {workspaces.length > 0 && (
           <ChipRow label="org">
-            {orgs.map((org) => (
-              <Chip key={org} label={org} onClick={() => insertToken(`@${org}`)} prefix="@" />
+            {workspaces.map((ws) => (
+              <Chip key={ws} label={ws} onClick={() => insertToken(`@${ws}`)} prefix="@" />
             ))}
           </ChipRow>
         )}
