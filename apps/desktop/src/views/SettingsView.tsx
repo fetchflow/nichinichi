@@ -32,8 +32,12 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
   }, []);
 
   const handleBrowse = async () => {
-    const selected = await openDialog({ directory: true, multiple: false });
-    if (typeof selected === "string") setRepoPath(selected);
+    try {
+      const selected = await openDialog({ directory: true, multiple: false });
+      if (typeof selected === "string") setRepoPath(selected);
+    } catch (e) {
+      console.error("browse failed:", e);
+    }
   };
 
   const handleSaveRepo = async () => {
