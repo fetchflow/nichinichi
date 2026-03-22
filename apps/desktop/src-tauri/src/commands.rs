@@ -752,6 +752,202 @@ pub async fn save_ai_key(
     Ok(())
 }
 
+// ── Config repo path ───────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_config_repo(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<String, String> {
+    let state = state.lock().await;
+    Ok(state.config.repo.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub async fn save_config_repo(
+    path: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let mut state = state.lock().await;
+
+    let home = dirs::home_dir().ok_or("cannot find home directory")?;
+    let config_path = home.join(".devlog.yml");
+    let content = if config_path.exists() {
+        std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?
+    } else {
+        format!(
+            "repo: ~/devlog\nai:\n  base_url: https://api.anthropic.com\n  api_key: \"\"\n  model: claude-sonnet-4-5\n"
+        )
+    };
+
+    let updated = if content.contains("repo:") {
+        let mut lines: Vec<String> = content.lines().map(String::from).collect();
+        for line in &mut lines {
+            if line.trim_start().starts_with("repo:") {
+                *line = format!("repo: {path}");
+                break;
+            }
+        }
+        lines.join("\n")
+    } else {
+        format!("repo: {path}\n") + &content
+    };
+
+    std::fs::write(&config_path, updated).map_err(|e| e.to_string())?;
+
+    // Update in-memory config
+    state.config.repo = std::path::PathBuf::from(path.replace("~/", &format!("{}/", home.display())));
+
+    Ok(())
+}
+
+// ── Goal metadata editing ──────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn update_goal_meta(
+    app: tauri::AppHandle,
+    goal_id: String,
+    title: String,
+    goal_type: Option<String>,
+    horizon: Option<String>,
+    why: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Goal, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    // Find the goal file by scanning goals directories
+    let file_path = find_goal_file(config, &goal_id)
+        .ok_or_else(|| format!("goal '{goal_id}' not found"))?;
+
+    let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+
+    let updated = update_yaml_key(&content, "type", goal_type.as_deref().unwrap_or(""));
+    let updated = update_yaml_key(&updated, "horizon", horizon.as_deref().unwrap_or(""));
+    let updated = update_yaml_key(&updated, "why", why.as_deref().unwrap_or(""));
+    let updated = update_h1_title(&updated, &title);
+
+    std::fs::write(&file_path, &updated).map_err(|e| e.to_string())?;
+
+    // Re-sync from the updated file
+    let target = LocalSqlite::new(state.pool.clone());
+    let path_str = file_path.to_string_lossy().to_string();
+    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str)
+        .map_err(|e| e.to_string())?;
+    target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(goal)
+}
+
+fn find_goal_file(config: &devlog_types::Config, goal_id: &str) -> Option<std::path::PathBuf> {
+    for subdir in &["active", "archive"] {
+        let p = config.repo.join("goals").join(subdir).join(format!("{goal_id}.md"));
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn update_yaml_key(content: &str, key: &str, value: &str) -> String {
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    let mut found = false;
+    for line in &mut lines {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with(&format!("{key}:")) {
+            if value.is_empty() {
+                *line = format!("{}:", key);
+            } else {
+                *line = format!("{key}: {value}");
+            }
+            found = true;
+            break;
+        }
+    }
+    if !found && !value.is_empty() {
+        // Insert before closing --- of frontmatter
+        let mut in_fm = false;
+        let mut inserted = false;
+        let mut result = Vec::new();
+        for line in lines {
+            if line == "---" {
+                if !in_fm {
+                    in_fm = true;
+                    result.push(line);
+                } else if !inserted {
+                    result.push(format!("{key}: {value}"));
+                    result.push(line);
+                    inserted = true;
+                } else {
+                    result.push(line);
+                }
+            } else {
+                result.push(line);
+            }
+        }
+        return result.join("\n");
+    }
+    lines.join("\n")
+}
+
+fn update_h1_title(content: &str, title: &str) -> String {
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    for line in &mut lines {
+        if line.starts_with("# ") && !line.starts_with("## ") {
+            *line = format!("# {title}");
+            break;
+        }
+    }
+    lines.join("\n")
+}
+
+// ── Playbook editing ────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn save_playbook(
+    app: tauri::AppHandle,
+    id: String,
+    title: String,
+    tags: Vec<String>,
+    content: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Playbook, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    // Find the playbook file
+    let pb_dir = config.repo.join("playbooks");
+    let file_path = pb_dir.join(format!("{id}.md"));
+    if !file_path.exists() {
+        return Err(format!("playbook '{id}' not found"));
+    }
+
+    // Read existing file to preserve org/forked_from/created metadata
+    let existing = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let path_str = file_path.to_string_lossy().to_string();
+    let old_pb = devlog_parser::playbook::parse_playbook_file(&existing, &path_str)
+        .map_err(|e| e.to_string())?;
+
+    let tags_str = tags.join(", ");
+    let org_val = old_pb.org.as_deref().unwrap_or("null");
+    let fork_val = old_pb.forked_from.as_deref().unwrap_or("null");
+    let created_val = old_pb.created_at.as_deref().unwrap_or("");
+
+    let new_file = format!(
+        "---\ntitle: {title}\ntags: [{tags_str}]\nforked_from: {fork_val}\norg: {org_val}\ncreated: {created_val}\n---\n\n{content}\n"
+    );
+
+    std::fs::write(&file_path, &new_file).map_err(|e| e.to_string())?;
+
+    let target = LocalSqlite::new(state.pool.clone());
+    let pb = devlog_parser::playbook::parse_playbook_file(&new_file, &path_str)
+        .map_err(|e| e.to_string())?;
+    target.upsert_playbook(&pb).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(pb)
+}
+
 // ── Orgs ───────────────────────────────────────────────────────────────────
 
 #[tauri::command]
