@@ -59,7 +59,7 @@ export function SwimLaneGraph({ months, size = "mini" }: Props) {
               width={cW}
               height={lH}
               rx="2"
-              fill={isHov ? color + "22" : "#1f2937"}
+              fill={isHov ? color + "22" : "var(--c-surface-2)"}
               style={{ transition: "fill 0.15s" }}
             />
             <text
@@ -69,7 +69,7 @@ export function SwimLaneGraph({ months, size = "mini" }: Props) {
               dominantBaseline="central"
               fontFamily="monospace"
               fontSize={size === "mini" ? 7 : 8}
-              fill={isHov ? color : "#6b7280"}
+              fill={isHov ? color : "var(--c-text-muted)"}
               fontWeight={isHov ? "700" : "400"}
             >
               {t}
@@ -103,8 +103,8 @@ export function SwimLaneGraph({ months, size = "mini" }: Props) {
           fontSize={size === "mini" ? 6 : 8}
           fill={
             Object.values(months[i]?.entries ?? {}).reduce((a, c) => a + c, 0) > 0
-              ? "#6b7280"
-              : "#374151"
+              ? "var(--c-text-muted)"
+              : "var(--c-arc-empty)"
           }
         >
           {months[i]?.label ?? ""}

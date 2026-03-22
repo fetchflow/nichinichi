@@ -88,7 +88,7 @@ export function StreamGraph({ days, size = "mini" }: Props) {
           textAnchor="middle"
           fontFamily="monospace"
           fontSize="7"
-          fill="#6b7280"
+          fill="var(--c-text-muted)"
         >
           {i + 1}
         </text>
