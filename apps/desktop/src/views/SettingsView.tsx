@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import type { Theme } from "../hooks/useTheme";
 import { useTimezone, systemTimezone } from "../hooks/useTimezone";
 
@@ -51,6 +52,66 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
     } finally {
       setSavingRepo(false);
     }
+  };
+
+  // Tags & project spaces
+  const [customTags, setCustomTags] = useState<string[]>([]);
+  const [managedOrgs, setManagedOrgs] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const [newOrg, setNewOrg] = useState("");
+  const [editingTag, setEditingTag] = useState<number | null>(null);
+  const [editingOrg, setEditingOrg] = useState<number | null>(null);
+  const [editTagVal, setEditTagVal] = useState("");
+  const [editOrgVal, setEditOrgVal] = useState("");
+
+  useEffect(() => {
+    invoke<Record<string, string>>("get_settings").then((s) => {
+      try { setCustomTags(JSON.parse(s["custom_tags"] ?? "[]")); } catch { /* noop */ }
+      try { setManagedOrgs(JSON.parse(s["managed_orgs"] ?? "[]")); } catch { /* noop */ }
+    }).catch(() => {});
+  }, []);
+
+  const saveTags = (tags: string[]) => {
+    setCustomTags(tags);
+    invoke("set_setting", { key: "custom_tags", value: JSON.stringify(tags) });
+  };
+  const saveOrgs = (orgs: string[]) => {
+    setManagedOrgs(orgs);
+    invoke("set_setting", { key: "managed_orgs", value: JSON.stringify(orgs) });
+  };
+
+  const addTag = (e: FormEvent) => {
+    e.preventDefault();
+    const t = newTag.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!t || customTags.includes(t)) return;
+    saveTags([...customTags, t]);
+    setNewTag("");
+  };
+  const addOrg = (e: FormEvent) => {
+    e.preventDefault();
+    const o = newOrg.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!o || managedOrgs.includes(o)) return;
+    saveOrgs([...managedOrgs, o]);
+    setNewOrg("");
+  };
+
+  const commitTagEdit = (i: number) => {
+    const t = editTagVal.trim().toLowerCase().replace(/\s+/g, "-");
+    if (t && t !== customTags[i]) {
+      const next = [...customTags];
+      next[i] = t;
+      saveTags(next);
+    }
+    setEditingTag(null);
+  };
+  const commitOrgEdit = (i: number) => {
+    const o = editOrgVal.trim().toLowerCase().replace(/\s+/g, "-");
+    if (o && o !== managedOrgs[i]) {
+      const next = [...managedOrgs];
+      next[i] = o;
+      saveOrgs(next);
+    }
+    setEditingOrg(null);
   };
 
   // Admin gate — click "Data" heading 5× rapidly to reveal danger zone
@@ -280,6 +341,125 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
             </button>
           </div>
         )}
+      </section>
+      {/* Tags & Project Spaces */}
+      <section>
+        <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Tags &amp; Project Spaces</h2>
+
+        {/* Custom tags */}
+        <div className="mb-5">
+          <p className="text-xs text-gray-500 mb-2">Custom tags</p>
+          <div className="space-y-1 mb-2">
+            {customTags.map((tag, i) => (
+              <div key={i} className="flex items-center gap-2">
+                {editingTag === i ? (
+                  <input
+                    autoFocus
+                    value={editTagVal}
+                    onChange={(e) => setEditTagVal(e.target.value)}
+                    onBlur={() => commitTagEdit(i)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); commitTagEdit(i); }
+                      if (e.key === "Escape") setEditingTag(null);
+                    }}
+                    className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                               border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+                  />
+                ) : (
+                  <span
+                    className="flex-1 text-sm font-mono text-gray-700 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-gray-100"
+                    onClick={() => { setEditingTag(i); setEditTagVal(tag); }}
+                  >
+                    #{tag}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => saveTags(customTags.filter((_, j) => j !== i))}
+                  className="text-xs text-gray-400 hover:text-red-400 transition-colors"
+                >
+                  remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={addTag} className="flex gap-2">
+            <input
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              placeholder="new-tag"
+              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                         border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+            />
+            <button
+              type="submit"
+              disabled={!newTag.trim()}
+              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40
+                         text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+            >
+              Add
+            </button>
+          </form>
+        </div>
+
+        {/* Project spaces / orgs */}
+        <div>
+          <p className="text-xs text-gray-500 mb-2">Project spaces</p>
+          <div className="space-y-1 mb-2">
+            {managedOrgs.map((org, i) => (
+              <div key={i} className="flex items-center gap-2">
+                {editingOrg === i ? (
+                  <input
+                    autoFocus
+                    value={editOrgVal}
+                    onChange={(e) => setEditOrgVal(e.target.value)}
+                    onBlur={() => commitOrgEdit(i)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); commitOrgEdit(i); }
+                      if (e.key === "Escape") setEditingOrg(null);
+                    }}
+                    className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                               border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+                  />
+                ) : (
+                  <span
+                    className="flex-1 text-sm font-mono text-gray-700 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-gray-100"
+                    onClick={() => { setEditingOrg(i); setEditOrgVal(org); }}
+                  >
+                    @{org}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => saveOrgs(managedOrgs.filter((_, j) => j !== i))}
+                  className="text-xs text-gray-400 hover:text-red-400 transition-colors"
+                >
+                  remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={addOrg} className="flex gap-2">
+            <input
+              value={newOrg}
+              onChange={(e) => setNewOrg(e.target.value)}
+              placeholder="project-name"
+              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                         border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+            />
+            <button
+              type="submit"
+              disabled={!newOrg.trim()}
+              className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40
+                         text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+            >
+              Add
+            </button>
+          </form>
+          <p className="text-xs text-gray-400 dark:text-gray-600 mt-2">
+            Orgs from existing entries also appear in the composer automatically.
+          </p>
+        </div>
       </section>
     </div>
   );
