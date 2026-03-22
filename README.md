@@ -11,7 +11,7 @@ Log daily work from the CLI or desktop app. All data lives as plain markdown fil
 - **CLI + desktop app** — log entries from the terminal or a native GUI
 - **Plain markdown** — all data is human-readable files you own
 - **Full-text search** — SQLite FTS5 index across all your entries
-- **AI chat panel** — ask questions about your work history; responses stream in real-time with markdown rendering; conversations auto-saved and resumable; AI can propose journal entries you can add with one click
+- **AI chat panel** — ask questions about your work history; ask the AI to create journal entries and add them with one click; responses stream with full markdown rendering; conversations auto-saved, browsable, and resumable
 - **Goals tracking** — step-by-step goal files with progress signals; steps and progress are editable in the desktop UI with write-back to markdown; progress entries can reference specific log entries via `refs:`
 - **Playbooks** — reusable runbooks stored as markdown; create, edit (split editor with live preview), and delete from the desktop UI
 - **Composer chip toolbar** — clickable chips for entry types (`#score`, `#solution`, etc.), custom tags, and workspaces (`@acme`) below the log input; clicking inserts the token at cursor
@@ -113,12 +113,27 @@ export AI_MODEL=llama3.2
 
 The desktop app includes a collapsible, resizable AI panel (toggle with the sparkle icon in the top-right). See [docs/ai-chat.md](docs/ai-chat.md) for the full feature guide.
 
-**Quick summary:**
-- Ask questions about your journal in natural language
+**Querying your journal:**
+```
+when did I fix something related to auth?
+summarise my decisions this week @acme
+what patterns do I keep repeating?
+```
+
+**Creating entries from chat:**
+```
+Log that I fixed the auth middleware bug @acme
+Create 3 entries for today: fixed a bug, reviewed a PR, joined standup @acme
+Add a #solution entry for solving the memory leak in the worker process
+```
+
+The AI responds with an amber entry card for each suggested entry. Click **Add to journal** to log it instantly. The button turns green and stays disabled — one click per entry, no duplicates.
+
+**Other highlights:**
 - Responses stream in with full markdown rendering
 - Conversations are auto-saved to `~/nichinichi/ai/` after each response
-- Browse and resume past conversations via the clock icon
-- Ask the AI to create a log entry — it will suggest one you can add with one click
+- Browse, resume, rename, archive, or delete past conversations via the clock icon
+- Multi-turn context — follow-up questions reference earlier turns
 
 ---
 

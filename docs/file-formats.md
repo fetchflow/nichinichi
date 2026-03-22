@@ -156,6 +156,20 @@ The body serializes all turns as `**you:**` / `**nichinichi:**` blocks so conver
 
 Archived conversations are moved to `ai/archive/`.
 
+## AI entry proposal (`nichinichi-entry` code block)
+
+When the AI is asked to create a journal entry, it responds with a fenced code block using the `nichinichi-entry` language tag:
+
+````markdown
+```nichinichi-entry
+fixed auth middleware bug, moved expiry check before decode @acme #solution
+```
+````
+
+The desktop chat panel intercepts this tag and renders an interactive entry card instead of a plain code block. Clicking **Add to journal** calls the `add_entry` Tauri command with the block content as the entry text; the timestamp is set to the current time automatically.
+
+**Format inside the block:** `body text @org #type #extra-tags` — same as the CLI entry format. The `@org` and `#type` fields are optional; the AI infers them from context or leaves them out if unspecified.
+
 ## Config file (`~/.nichinichi.yml`)
 
 ```yaml
