@@ -34,6 +34,7 @@ function relativeTime(date: Date): string {
 
 export default function App() {
   const [section, setSection] = useState<Section>("dashboard");
+  const [aiOpen, setAiOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const { activeOrg, setActiveOrg, orgs, workspaces, setWorkspaces } = useOrg();
   const ai = useAi();
@@ -99,27 +100,46 @@ export default function App() {
               {section}
             </span>
 
-            {/* Sync indicator */}
-            <button
-              onClick={sync.syncNow}
-              disabled={sync.syncing}
-              title={sync.syncing ? "Syncing…" : "Click to sync now"}
-              className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400
-                         disabled:cursor-default transition-colors font-mono"
-            >
-              <span
-                className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                  sync.syncing
-                    ? "bg-violet-500 animate-pulse"
-                    : "bg-gray-300 dark:bg-gray-700"
+            <div className="flex items-center gap-3">
+              {/* Sync indicator */}
+              <button
+                onClick={sync.syncNow}
+                disabled={sync.syncing}
+                title={sync.syncing ? "Syncing…" : "Click to sync now"}
+                className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400
+                           disabled:cursor-default transition-colors font-mono"
+              >
+                <span
+                  className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                    sync.syncing
+                      ? "bg-violet-500 animate-pulse"
+                      : "bg-gray-300 dark:bg-gray-700"
+                  }`}
+                />
+                {sync.syncing
+                  ? "syncing…"
+                  : sync.lastSyncAt
+                  ? `synced ${relativeTime(sync.lastSyncAt)}`
+                  : "never synced"}
+              </button>
+
+              {/* AI panel toggle */}
+              <button
+                onClick={() => setAiOpen((o) => !o)}
+                title={aiOpen ? "Close AI panel" : "Ask Nichinichi"}
+                className={`p-1.5 rounded transition-colors ${
+                  aiOpen
+                    ? "text-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                    : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
                 }`}
-              />
-              {sync.syncing
-                ? "syncing…"
-                : sync.lastSyncAt
-                ? `synced ${relativeTime(sync.lastSyncAt)}`
-                : "never synced"}
-            </button>
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z" />
+                  <path d="M5 19.5l.75 2.25L8 23l-2.25.75L5 26l-.75-2.25L2 23l2.25-.75z" />
+                  <path d="M19 2l.75 2.25L22 5l-2.25.75L19 8l-.75-2.25L16 5l2.25-.75z" />
+                </svg>
+              </button>
+            </div>
           </header>
 
           {/* View */}
@@ -146,16 +166,19 @@ export default function App() {
           </div>
         </div>
 
-        {/* AI panel — always visible, 280px */}
-        <div className="w-72 flex-shrink-0 flex flex-col overflow-hidden bg-white dark:bg-gray-900">
-          <AskPanel
-            messages={ai.messages}
-            streaming={ai.streaming}
-            onAsk={(q) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg)}
-            onSave={() => ai.save(activeOrg === "all" ? undefined : activeOrg)}
-            onClear={ai.clear}
-          />
-        </div>
+        {/* AI panel — toggleable, default collapsed */}
+        {aiOpen && (
+          <div className="w-72 flex-shrink-0 flex flex-col overflow-hidden bg-white dark:bg-gray-900">
+            <AskPanel
+              messages={ai.messages}
+              streaming={ai.streaming}
+              onAsk={(q) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg)}
+              onSave={() => ai.save(activeOrg === "all" ? undefined : activeOrg)}
+              onClear={ai.clear}
+              onClose={() => setAiOpen(false)}
+            />
+          </div>
+        )}
       </main>
     </div>
   );

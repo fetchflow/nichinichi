@@ -7,9 +7,10 @@ interface Props {
   onAsk: (query: string) => void;
   onSave: () => void;
   onClear: () => void;
+  onClose: () => void;
 }
 
-export function AskPanel({ messages, streaming, onAsk, onSave, onClear }: Props) {
+export function AskPanel({ messages, streaming, onAsk, onSave, onClear, onClose }: Props) {
   const [input, setInput] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -25,7 +26,7 @@ export function AskPanel({ messages, streaming, onAsk, onSave, onClear }: Props)
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Ask Nichinichi</span>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           {messages.length > 0 && (
             <>
               <button
@@ -42,6 +43,16 @@ export function AskPanel({ messages, streaming, onAsk, onSave, onClear }: Props)
               </button>
             </>
           )}
+          <button
+            onClick={onClose}
+            title="Close AI panel"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
       </div>
 
