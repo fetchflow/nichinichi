@@ -138,6 +138,9 @@ pub struct GoalProgress {
     pub signal: ProgressSignal,
     pub note: Option<String>,
     pub created_at: Option<String>,
+    /// Log-entry refs in "YYYY-MM-DD HH:MM" format
+    #[serde(default)]
+    pub refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1014,6 +1014,8 @@ pub struct ProgressInput {
     pub date: String,
     pub signal: String,
     pub note: Option<String>,
+    #[serde(default)]
+    pub refs: Vec<String>,
 }
 
 #[tauri::command]
@@ -1133,6 +1135,9 @@ fn replace_progress_section(content: &str, progress: &[ProgressInput]) -> String
                 if !note.is_empty() {
                     result.push(format!("note: {note}"));
                 }
+            }
+            if !entry.refs.is_empty() {
+                result.push(format!("refs: [{}]", entry.refs.join(", ")));
             }
             if i + 1 < progress.len() {
                 result.push(String::new());

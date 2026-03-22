@@ -62,7 +62,7 @@ export function useGoals(status?: string, org?: string) {
     async (
       goalId: string,
       steps: { title: string; done: boolean; notes?: string; due_date?: string }[],
-      progress: { date: string; signal: string; note?: string }[]
+      progress: { date: string; signal: string; note?: string; refs?: string[] }[]
     ) => {
       await invoke("save_goal_content", { goalId, steps, progress });
       load();

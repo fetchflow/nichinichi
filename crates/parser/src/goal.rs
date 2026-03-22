@@ -170,10 +170,12 @@ fn parse_progress(body: &str, goal_id: &str) -> Vec<GoalProgress> {
     let mut current_date: Option<String> = None;
     let mut current_signal: Option<ProgressSignal> = None;
     let mut note_lines: Vec<String> = Vec::new();
+    let mut current_refs: Vec<String> = Vec::new();
 
     let flush = |date: &mut Option<String>,
                  signal: &mut Option<ProgressSignal>,
                  notes: &mut Vec<String>,
+                 refs: &mut Vec<String>,
                  progress: &mut Vec<GoalProgress>,
                  goal_id: &str| {
         if let (Some(d), Some(sig)) = (date.take(), signal.take()) {
@@ -191,6 +193,7 @@ fn parse_progress(body: &str, goal_id: &str) -> Vec<GoalProgress> {
                 signal: sig,
                 note,
                 created_at: None,
+                refs: refs.drain(..).collect(),
             });
             notes.clear();
         }
@@ -205,7 +208,7 @@ fn parse_progress(body: &str, goal_id: &str) -> Vec<GoalProgress> {
         }
         if trimmed.starts_with("## ") && trimmed != "## progress" {
             if in_progress_section {
-                flush(&mut current_date, &mut current_signal, &mut note_lines, &mut progress, goal_id);
+                flush(&mut current_date, &mut current_signal, &mut note_lines, &mut current_refs, &mut progress, goal_id);
             }
             in_progress_section = false;
             continue;
@@ -216,17 +219,21 @@ fn parse_progress(body: &str, goal_id: &str) -> Vec<GoalProgress> {
         }
 
         if trimmed.starts_with("### ") {
-            flush(&mut current_date, &mut current_signal, &mut note_lines, &mut progress, goal_id);
+            flush(&mut current_date, &mut current_signal, &mut note_lines, &mut current_refs, &mut progress, goal_id);
             current_date = Some(trimmed[4..].trim().to_string());
         } else if let Some(rest) = trimmed.strip_prefix("signal:") {
             current_signal = rest.trim().parse::<ProgressSignal>().ok();
         } else if let Some(rest) = trimmed.strip_prefix("note:") {
             note_lines.push(rest.trim().to_string());
+        } else if let Some(rest) = trimmed.strip_prefix("refs:") {
+            // Parse "refs: [2026-03-17 11:32, 2026-03-17 16:48]"
+            let inner = rest.trim().trim_start_matches('[').trim_end_matches(']');
+            current_refs = inner.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
         } else if !trimmed.is_empty() && current_date.is_some() {
             note_lines.push(trimmed.to_string());
         }
     }
-    flush(&mut current_date, &mut current_signal, &mut note_lines, &mut progress, goal_id);
+    flush(&mut current_date, &mut current_signal, &mut note_lines, &mut current_refs, &mut progress, goal_id);
 
     progress
 }

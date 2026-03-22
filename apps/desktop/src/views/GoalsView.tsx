@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { SkeletonBlock } from "../components/Skeleton";
 import { useGoals } from "../hooks/useGoals";
+import type { Entry } from "../types";
 import { SIGNAL_COLORS } from "../types";
 
 interface Props {
@@ -26,6 +28,7 @@ interface ProgressDraft {
   date: string;
   signal: string;
   note: string;
+  refs: string[]; // "YYYY-MM-DD HH:MM" strings
 }
 
 const SIGNALS = ["breakthrough", "strong", "steady", "moderate", "struggling", "quiet"] as const;
@@ -52,8 +55,12 @@ export function GoalsView({ activeOrg }: Props) {
     date: new Date().toISOString().slice(0, 10),
     signal: "steady",
     note: "",
+    refs: [],
   });
   const [progressSaving, setProgressSaving] = useState(false);
+  // Entries for the selected date (used in the entry picker)
+  const [dateEntries, setDateEntries] = useState<Entry[]>([]);
+  const [dateEntriesLoading, setDateEntriesLoading] = useState(false);
 
   // ── Meta edit ──────────────────────────────────────────────────────────────
 
@@ -102,7 +109,7 @@ export function GoalsView({ activeOrg }: Props) {
       await saveGoalContent(
         goalId,
         stepDrafts.map((s) => ({ title: s.title, done: s.done, notes: s.notes || undefined, due_date: s.due_date || undefined })),
-        goal.progress.map((p) => ({ date: p.period_start, signal: p.signal, note: p.note ?? undefined }))
+        goal.progress.map((p) => ({ date: p.period_start, signal: p.signal, note: p.note ?? undefined, refs: p.refs }))
       );
       setEditingStepsId(null);
     } finally {
@@ -130,25 +137,55 @@ export function GoalsView({ activeOrg }: Props) {
 
   // ── Progress ───────────────────────────────────────────────────────────────
 
+  // Load entries for the currently selected progress date
+  useEffect(() => {
+    if (!addingProgressId || !progressDraft.date) return;
+    setDateEntriesLoading(true);
+    invoke<Entry[]>("get_entries", { date: progressDraft.date })
+      .then(setDateEntries)
+      .catch(() => setDateEntries([]))
+      .finally(() => setDateEntriesLoading(false));
+  }, [addingProgressId, progressDraft.date]);
+
   const openAddProgress = (goalId: string) => {
     setAddingProgressId(goalId);
-    setProgressDraft({ date: new Date().toISOString().slice(0, 10), signal: "steady", note: "" });
+    setProgressDraft({ date: new Date().toISOString().slice(0, 10), signal: "steady", note: "", refs: [] });
+    setDateEntries([]);
   };
 
-  const cancelAddProgress = () => setAddingProgressId(null);
+  const cancelAddProgress = () => {
+    setAddingProgressId(null);
+    setDateEntries([]);
+  };
+
+  const toggleRef = (ref: string) => {
+    setProgressDraft((d) => ({
+      ...d,
+      refs: d.refs.includes(ref) ? d.refs.filter((r) => r !== ref) : [...d.refs, ref],
+    }));
+  };
 
   const saveProgress = async (goal: (typeof goals)[0]) => {
     setProgressSaving(true);
     try {
-      const newEntry = { date: progressDraft.date, signal: progressDraft.signal, note: progressDraft.note || undefined };
+      const newEntry = {
+        date: progressDraft.date,
+        signal: progressDraft.signal,
+        note: progressDraft.note || undefined,
+        refs: progressDraft.refs.length > 0 ? progressDraft.refs : undefined,
+      };
       // Prepend (newest first)
-      const allProgress = [newEntry, ...goal.progress.map((p) => ({ date: p.period_start, signal: p.signal, note: p.note ?? undefined }))];
+      const allProgress = [
+        newEntry,
+        ...goal.progress.map((p) => ({ date: p.period_start, signal: p.signal, note: p.note ?? undefined, refs: p.refs })),
+      ];
       await saveGoalContent(
         goal.id,
         goal.steps.map((s) => ({ title: s.title, done: s.status === "done", notes: s.notes ?? undefined, due_date: s.due_date ?? undefined })),
         allProgress
       );
       setAddingProgressId(null);
+      setDateEntries([]);
     } finally {
       setProgressSaving(false);
     }
@@ -159,6 +196,7 @@ export function GoalsView({ activeOrg }: Props) {
       date: p.period_start,
       signal: p.signal,
       note: p.note ?? undefined,
+      refs: p.refs,
     }));
     await saveGoalContent(
       goal.id,
@@ -436,7 +474,7 @@ export function GoalsView({ activeOrg }: Props) {
                 <input
                   type="date"
                   value={progressDraft.date}
-                  onChange={(e) => setProgressDraft((d) => ({ ...d, date: e.target.value }))}
+                  onChange={(e) => setProgressDraft((d) => ({ ...d, date: e.target.value, refs: [] }))}
                   className={inputCls}
                 />
                 <select
@@ -456,6 +494,33 @@ export function GoalsView({ activeOrg }: Props) {
                 className={`w-full ${inputCls} resize-none`}
                 placeholder="note…"
               />
+              {/* Entry picker */}
+              {dateEntriesLoading && (
+                <p className="text-xs text-gray-400 dark:text-gray-600">loading entries…</p>
+              )}
+              {!dateEntriesLoading && dateEntries.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 dark:text-gray-600 mb-1">link entries from this date:</p>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {dateEntries.map((entry) => {
+                      const ref = `${entry.date} ${entry.time}`;
+                      const checked = progressDraft.refs.includes(ref);
+                      return (
+                        <label key={entry.id} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleRef(ref)}
+                            className="accent-green-500 shrink-0"
+                          />
+                          <span className="text-xs text-gray-500 dark:text-gray-500 font-mono shrink-0">{entry.time}</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-400 truncate">{entry.body}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={() => saveProgress(goal)}
@@ -476,28 +541,42 @@ export function GoalsView({ activeOrg }: Props) {
               <p className="text-xs text-gray-400 dark:text-gray-600 italic">No progress entries yet.</p>
             )}
             {goal.progress.map((entry, idx) => (
-              <div key={entry.id} className="flex items-start gap-2 group">
-                <span className="text-xs text-gray-400 dark:text-gray-600 font-mono shrink-0 mt-0.5">{entry.period_start}</span>
-                <span
-                  className="text-xs px-1.5 py-0.5 rounded shrink-0"
-                  style={{
-                    color: SIGNAL_COLORS[entry.signal],
-                    backgroundColor: SIGNAL_COLORS[entry.signal] + "22",
-                  }}
-                >
-                  {entry.signal}
-                </span>
-                {entry.note && (
-                  <span className="text-xs text-gray-600 dark:text-gray-400 flex-1 leading-relaxed">{entry.note}</span>
-                )}
-                {!isArchived && (
-                  <button
-                    onClick={() => deleteProgress(goal, idx)}
-                    className="text-xs text-gray-300 dark:text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                    title="delete entry"
+              <div key={entry.id} className="group">
+                <div className="flex items-start gap-2">
+                  <span className="text-xs text-gray-400 dark:text-gray-600 font-mono shrink-0 mt-0.5">{entry.period_start}</span>
+                  <span
+                    className="text-xs px-1.5 py-0.5 rounded shrink-0"
+                    style={{
+                      color: SIGNAL_COLORS[entry.signal],
+                      backgroundColor: SIGNAL_COLORS[entry.signal] + "22",
+                    }}
                   >
-                    ×
-                  </button>
+                    {entry.signal}
+                  </span>
+                  {entry.note && (
+                    <span className="text-xs text-gray-600 dark:text-gray-400 flex-1 leading-relaxed">{entry.note}</span>
+                  )}
+                  {!isArchived && (
+                    <button
+                      onClick={() => deleteProgress(goal, idx)}
+                      className="text-xs text-gray-300 dark:text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                      title="delete entry"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                {entry.refs && entry.refs.length > 0 && (
+                  <div className="ml-[4.5rem] mt-1 space-y-0.5">
+                    {entry.refs.map((ref) => {
+                      const time = ref.split(" ")[1] ?? ref;
+                      return (
+                        <p key={ref} className="text-xs text-gray-400 dark:text-gray-600 font-mono">
+                          → {time}
+                        </p>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             ))}

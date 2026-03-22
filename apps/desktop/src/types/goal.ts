@@ -27,6 +27,7 @@ export interface GoalProgress {
   signal: ProgressSignal;
   note?: string;
   created_at?: string;
+  refs?: string[];
 }
 
 export interface Goal {
