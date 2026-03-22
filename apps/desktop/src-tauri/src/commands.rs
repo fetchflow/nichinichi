@@ -1,6 +1,6 @@
 use nichinichi_ai::{save_conversation, search_entries, AiClient};
 use nichinichi_sync::{rebuild_from_disk, sync_incremental, LocalSqlite, SyncTarget};
-use nichinichi_types::{Config, Goal, OrgScope, ParsedEntry, Playbook};
+use nichinichi_types::{ChatMessage, Config, Goal, OrgScope, ParsedEntry, Playbook};
 use serde::Serialize;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
@@ -473,6 +473,7 @@ pub async fn get_last_sync(state: State<'_, Mutex<AppState>>) -> Result<String, 
 #[tauri::command]
 pub async fn ai_ask(
     query: String,
+    history: Vec<ChatMessage>,
     org: Option<String>,
     window: Window,
     state: State<'_, Mutex<AppState>>,
@@ -496,7 +497,7 @@ pub async fn ai_ask(
     let window_clone = window.clone();
 
     let response = client
-        .ask(&query, &context, move |chunk| {
+        .ask(&query, &context, &history, move |chunk| {
             let _ = window_clone.emit("ai-chunk", &chunk);
         })
         .await
@@ -881,6 +882,56 @@ pub async fn save_ai_key(
 
     std::fs::write(&config_path, updated).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn save_ai_config(
+    api_key: String,
+    base_url: String,
+    model: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let mut state = state.lock().await;
+
+    // Update in-memory config
+    state.config.ai.api_key = api_key.clone();
+    state.config.ai.base_url = base_url.clone();
+    state.config.ai.model = model.clone();
+
+    // Write to ~/.nichinichi.yml
+    let home = dirs::home_dir().ok_or("cannot find home directory")?;
+    let config_path = home.join(".nichinichi.yml");
+    let content = if config_path.exists() {
+        std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?
+    } else {
+        "repo: ~/nichinichi\nai:\n  base_url: \"\"\n  api_key: \"\"\n  model: \"\"\n".to_string()
+    };
+
+    let updated = replace_yaml_field(&content, "api_key", &api_key);
+    let updated = replace_yaml_field(&updated, "base_url", &base_url);
+    let updated = replace_yaml_field(&updated, "model", &model);
+
+    std::fs::write(&config_path, updated).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Replace a YAML field value in-place, preserving indentation.
+fn replace_yaml_field(content: &str, key: &str, value: &str) -> String {
+    let needle = format!("{}:", key);
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    let mut found = false;
+    for line in &mut lines {
+        if line.trim_start().starts_with(&needle) {
+            let indent = line.len() - line.trim_start().len();
+            *line = format!("{}{}: \"{}\"", " ".repeat(indent), key, value);
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        lines.push(format!("  {}: \"{}\"", key, value));
+    }
+    lines.join("\n")
 }
 
 // ── Config repo path ───────────────────────────────────────────────────────
