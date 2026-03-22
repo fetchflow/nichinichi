@@ -44,6 +44,7 @@ export interface MonthBucket {
 
 export interface ActivityPayload {
   weekly: WeekBucket[];
+  week_days: WeekBucket[];
   monthly: DayBucket[];
   yearly: MonthBucket[];
 }

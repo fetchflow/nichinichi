@@ -651,6 +651,7 @@ pub struct MonthBucket {
 
 #[derive(Serialize)]
 pub struct ActivityPayload {
+    pub week_days: Vec<WeekBucket>,
     pub weekly: Vec<WeekBucket>,
     pub monthly: Vec<DayBucket>,
     pub yearly: Vec<MonthBucket>,
@@ -777,7 +778,39 @@ pub async fn get_activity(
         })
         .collect();
 
-    Ok(ActivityPayload { weekly, monthly, yearly })
+
+    // ── Week days (Mon–Sun of current week) ──────────────────────────────
+    let sunday = this_monday + Duration::days(6);
+    let week_day_rows: Vec<(String, String, i64)> = sqlx::query_as::<_, (String, String, i64)>(&format!(
+        "SELECT date, type, COUNT(*) as cnt FROM entries \
+         WHERE date >= '{}' AND date <= '{}'{org_clause} \
+         GROUP BY date, type ORDER BY date",
+        this_monday.format("%Y-%m-%d"),
+        sunday.format("%Y-%m-%d")
+    ))
+    .fetch_all(pool)
+    .await
+    .map_err(|e: sqlx::Error| e.to_string())?;
+
+    let mut week_day_map: HashMap<String, HashMap<String, i64>> = HashMap::new();
+    for (d, t, cnt) in week_day_rows {
+        week_day_map.entry(d).or_default().insert(t, cnt);
+    }
+
+    let day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    let week_days: Vec<WeekBucket> = (0..7i64)
+        .map(|i| {
+            let date = this_monday + Duration::days(i);
+            let key = date.format("%Y-%m-%d").to_string();
+            WeekBucket {
+                week_start: key.clone(),
+                label: day_names[i as usize].to_string(),
+                entries: week_day_map.remove(&key).unwrap_or_default(),
+            }
+        })
+        .collect();
+
+    Ok(ActivityPayload { weekly, monthly, yearly, week_days })
 }
 
 // ── Settings ───────────────────────────────────────────────────────────────
