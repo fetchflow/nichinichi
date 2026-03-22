@@ -169,19 +169,78 @@ pub async fn get_goals(
 
 #[tauri::command]
 pub async fn update_goal_step(
+    app: tauri::AppHandle,
     step_id: String,
     done: bool,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
     let state = state.lock().await;
-    let status = if done { "done" } else { "not_started" };
-    sqlx::query("UPDATE goal_steps SET status = ? WHERE id = ?")
-        .bind(status)
-        .bind(&step_id)
-        .execute(&state.pool)
-        .await
+
+    // Fetch the goal_id for this step so we can locate the file
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT goal_id FROM goal_steps WHERE id = ?")
+            .bind(&step_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    let goal_id = row.ok_or("step not found")?.0;
+
+    let file_path = find_goal_file(&state.config, &goal_id)
+        .ok_or_else(|| format!("goal '{goal_id}' not found"))?;
+
+    let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let updated = toggle_step_in_file(&content, &step_id, done, &state.pool).await?;
+    std::fs::write(&file_path, &updated).map_err(|e| e.to_string())?;
+
+    let path_str = file_path.to_string_lossy().to_string();
+    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str)
         .map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
     Ok(())
+}
+
+async fn toggle_step_in_file(
+    content: &str,
+    step_id: &str,
+    done: bool,
+    pool: &sqlx::SqlitePool,
+) -> Result<String, String> {
+    // Fetch the step title so we can find the right line
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT title FROM goal_steps WHERE id = ?")
+            .bind(step_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    let title = row.ok_or("step not found")?.0;
+
+    let checkbox_done = if done { "[x]" } else { "[ ]" };
+    let checkbox_other = if done { "[ ]" } else { "[x]" };
+
+    // Replace the first checkbox line that matches the step title
+    let mut replaced = false;
+    let updated: Vec<String> = content
+        .lines()
+        .map(|line| {
+            if !replaced {
+                let trimmed = line.trim_start();
+                if (trimmed.starts_with(&format!("- {checkbox_other} {title}"))
+                    || trimmed.starts_with(&format!("- [ ] {title}"))
+                    || trimmed.starts_with(&format!("- [x] {title}")))
+                    && trimmed.ends_with(title.trim_end())
+                {
+                    replaced = true;
+                    let indent = &line[..line.len() - trimmed.len()];
+                    return format!("{indent}- {checkbox_done} {title}");
+                }
+            }
+            line.to_string()
+        })
+        .collect();
+    Ok(updated.join("\n"))
 }
 
 #[tauri::command]
@@ -938,6 +997,155 @@ fn update_h1_title(content: &str, title: &str) -> String {
         }
     }
     lines.join("\n")
+}
+
+// ── Goal content editing (steps + progress) ────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct StepInput {
+    pub title: String,
+    pub done: bool,
+    pub notes: Option<String>,
+    pub due_date: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct ProgressInput {
+    pub date: String,
+    pub signal: String,
+    pub note: Option<String>,
+}
+
+#[tauri::command]
+pub async fn save_goal_content(
+    app: tauri::AppHandle,
+    goal_id: String,
+    steps: Vec<StepInput>,
+    progress: Vec<ProgressInput>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Goal, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    let file_path = find_goal_file(config, &goal_id)
+        .ok_or_else(|| format!("goal '{goal_id}' not found"))?;
+
+    let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let updated = replace_steps_section(&content, &steps);
+    let updated = replace_progress_section(&updated, &progress);
+
+    std::fs::write(&file_path, &updated).map_err(|e| e.to_string())?;
+
+    let path_str = file_path.to_string_lossy().to_string();
+    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str)
+        .map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(goal)
+}
+
+fn replace_steps_section(content: &str, steps: &[StepInput]) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+
+    // Find the ## steps heading
+    let steps_start = lines.iter().position(|l| l.trim() == "## steps");
+    let Some(steps_start) = steps_start else {
+        // No steps section — append one before ## progress or at end
+        let progress_pos = lines.iter().position(|l| l.trim() == "## progress");
+        let insert_at = progress_pos.unwrap_or(lines.len());
+        let mut result: Vec<String> = lines[..insert_at].iter().map(|l| l.to_string()).collect();
+        result.push(String::new());
+        result.push("## steps".to_string());
+        result.push(String::new());
+        for step in steps {
+            serialize_step_into(&mut result, step);
+        }
+        result.push(String::new());
+        for l in &lines[insert_at..] {
+            result.push(l.to_string());
+        }
+        return result.join("\n");
+    };
+
+    // Find end of steps section (next ## heading or EOF)
+    let steps_end = lines[steps_start + 1..]
+        .iter()
+        .position(|l| l.starts_with("## "))
+        .map(|i| steps_start + 1 + i)
+        .unwrap_or(lines.len());
+
+    let mut result: Vec<String> = lines[..steps_start].iter().map(|l| l.to_string()).collect();
+    result.push("## steps".to_string());
+    result.push(String::new());
+    for step in steps {
+        serialize_step_into(&mut result, step);
+    }
+    if steps_end < lines.len() {
+        result.push(String::new());
+        for l in &lines[steps_end..] {
+            result.push(l.to_string());
+        }
+    }
+    result.join("\n")
+}
+
+fn serialize_step_into(out: &mut Vec<String>, step: &StepInput) {
+    let checkbox = if step.done { "[x]" } else { "[ ]" };
+    out.push(format!("- {checkbox} {}", step.title));
+    if let Some(notes) = &step.notes {
+        if !notes.is_empty() {
+            out.push(format!("      notes: {notes}"));
+        }
+    }
+    if let Some(due) = &step.due_date {
+        if !due.is_empty() {
+            out.push(format!("      due: {due}"));
+        }
+    }
+}
+
+fn replace_progress_section(content: &str, progress: &[ProgressInput]) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+
+    let progress_start = lines.iter().position(|l| l.trim() == "## progress");
+
+    let mut result: Vec<String>;
+    if let Some(ps) = progress_start {
+        result = lines[..ps].iter().map(|l| l.to_string()).collect();
+    } else {
+        result = lines.iter().map(|l| l.to_string()).collect();
+        // Trim trailing blank lines before appending
+        while result.last().map(|l: &String| l.is_empty()) == Some(true) {
+            result.pop();
+        }
+    }
+
+    if !progress.is_empty() {
+        result.push(String::new());
+        result.push("## progress".to_string());
+        result.push(String::new());
+        for (i, entry) in progress.iter().enumerate() {
+            result.push(format!("### {}", entry.date));
+            result.push(format!("signal: {}", entry.signal));
+            if let Some(note) = &entry.note {
+                if !note.is_empty() {
+                    result.push(format!("note: {note}"));
+                }
+            }
+            if i + 1 < progress.len() {
+                result.push(String::new());
+            }
+        }
+    }
+
+    // Ensure file ends with a single newline
+    let mut s = result.join("\n");
+    if !s.ends_with('\n') {
+        s.push('\n');
+    }
+    s
 }
 
 // ── Playbook editing ────────────────────────────────────────────────────────

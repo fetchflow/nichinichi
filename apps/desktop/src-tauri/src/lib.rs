@@ -52,6 +52,7 @@ pub fn run() {
             commands::save_config_repo,
             commands::get_orgs,
             commands::update_goal_meta,
+            commands::save_goal_content,
             commands::save_playbook,
         ])
         .run(tauri::generate_context!())
