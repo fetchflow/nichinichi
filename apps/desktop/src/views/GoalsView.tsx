@@ -15,8 +15,8 @@ interface EditState {
 }
 
 export function GoalsView({ activeOrg }: Props) {
-  const { goals, loading, error, toggleStep, archiveGoal, updateGoalMeta } = useGoals(
-    "active",
+  const { goals, loading, error, toggleStep, archiveGoal, reactivateGoal, updateGoalMeta } = useGoals(
+    undefined,   // no status filter — show all
     activeOrg
   );
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -73,25 +73,44 @@ export function GoalsView({ activeOrg }: Props) {
     return (
       <div className="flex items-center justify-center h-full">
         <p className="text-sm text-gray-400 dark:text-gray-600">
-          No active goals. Use the CLI to add one:
+          No goals yet. Use the CLI to add one:
           <code className="ml-2 text-gray-500">devlog goals add "title"</code>
         </p>
       </div>
     );
   }
 
-  return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-      {goals.map((goal) => {
-        const done = goal.steps.filter((s) => s.status === "done").length;
-        const total = goal.steps.length;
-        const latestProgress = goal.progress[0];
+  const active = goals.filter((g) => g.status === "active" || g.status === "paused");
+  const archived = goals.filter((g) => g.status === "done" || g.status === "abandoned");
 
-        return (
-          <div
-            key={goal.id}
-            className="bg-gray-100/40 dark:bg-gray-800/40 rounded-lg p-5 border border-gray-200/50 dark:border-gray-700/50"
-          >
+  const STATUS_LABELS: Record<string, string> = {
+    active: "active",
+    paused: "paused",
+    done: "done",
+    abandoned: "abandoned",
+  };
+  const STATUS_COLORS: Record<string, string> = {
+    active: "text-green-500",
+    paused: "text-yellow-500",
+    done: "text-blue-400",
+    abandoned: "text-gray-400",
+  };
+
+  const renderGoal = (goal: (typeof goals)[0]) => {
+    const done = goal.steps.filter((s) => s.status === "done").length;
+    const total = goal.steps.length;
+    const latestProgress = goal.progress[0];
+    const isArchived = goal.status === "done" || goal.status === "abandoned";
+
+    return (
+      <div
+        key={goal.id}
+        className={`rounded-lg p-5 border ${
+          isArchived
+            ? "bg-gray-50/40 dark:bg-gray-900/40 border-gray-200/30 dark:border-gray-800/30 opacity-70"
+            : "bg-gray-100/40 dark:bg-gray-800/40 border-gray-200/50 dark:border-gray-700/50"
+        }`}
+      >
             {/* Goal header */}
             {editingId === goal.id ? (
               <div className="mb-4 space-y-2">
@@ -145,9 +164,14 @@ export function GoalsView({ activeOrg }: Props) {
             ) : (
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h3 className="text-base font-medium text-gray-800 dark:text-gray-200">
-                    {goal.title}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-medium text-gray-800 dark:text-gray-200">
+                      {goal.title}
+                    </h3>
+                    <span className={`text-xs font-mono ${STATUS_COLORS[goal.status]}`}>
+                      {STATUS_LABELS[goal.status]}
+                    </span>
+                  </div>
                   {goal.horizon && (
                     <p className="text-xs text-gray-500 mt-0.5">{goal.horizon}</p>
                   )}
@@ -165,16 +189,19 @@ export function GoalsView({ activeOrg }: Props) {
                       {latestProgress.signal}
                     </span>
                   )}
-                  <span className="text-xs text-gray-500">
-                    {done}/{total}
-                  </span>
-                  <button
-                    onClick={() => startEdit(goal)}
-                    className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
-                    title="Edit goal"
-                  >
-                    edit
-                  </button>
+                  {total > 0 && (
+                    <span className="text-xs text-gray-500">
+                      {done}/{total}
+                    </span>
+                  )}
+                  {!isArchived && (
+                    <button
+                      onClick={() => startEdit(goal)}
+                      className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
+                    >
+                      edit
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -227,24 +254,52 @@ export function GoalsView({ activeOrg }: Props) {
               ))}
             </div>
 
-            {/* Archive actions */}
-            <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
-              <button
-                onClick={() => archiveGoal(goal.id, "done")}
-                className="text-xs text-green-500 hover:text-green-400 transition-colors"
-              >
-                mark done
-              </button>
-              <button
-                onClick={() => archiveGoal(goal.id, "abandoned")}
-                className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-500 transition-colors"
-              >
-                abandon
-              </button>
+            {/* Status actions */}
+            <div className="flex gap-3 mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
+              {isArchived ? (
+                <button
+                  onClick={() => reactivateGoal(goal.id)}
+                  className="text-xs text-violet-500 hover:text-violet-400 transition-colors"
+                >
+                  reactivate
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => archiveGoal(goal.id, "done")}
+                    className="text-xs text-green-500 hover:text-green-400 transition-colors"
+                  >
+                    mark done
+                  </button>
+                  <button
+                    onClick={() => archiveGoal(goal.id, "abandoned")}
+                    className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-500 transition-colors"
+                  >
+                    abandon
+                  </button>
+                </>
+              )}
             </div>
           </div>
-        );
-      })}
+    );
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      {active.map(renderGoal)}
+
+      {archived.length > 0 && (
+        <>
+          <div className="flex items-center gap-3 pt-2">
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
+            <span className="text-xs text-gray-400 dark:text-gray-600 font-mono uppercase tracking-wider">
+              archived
+            </span>
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
+          </div>
+          {archived.map(renderGoal)}
+        </>
+      )}
     </div>
   );
 }

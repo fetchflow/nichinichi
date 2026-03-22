@@ -193,16 +193,17 @@ pub async fn archive_goal(
     let state = state.lock().await;
     let config = &state.config;
 
-    let active_path = config.repo.join("goals").join("active").join(format!("{goal_id}.md"));
-    if !active_path.exists() {
-        return Err(format!("goal '{}' not found in goals/active/", goal_id));
-    }
+    // Accept from either active or archive (e.g. paused → done)
+    let src_path = ["active", "archive"]
+        .iter()
+        .map(|d| config.repo.join("goals").join(d).join(format!("{goal_id}.md")))
+        .find(|p| p.exists())
+        .ok_or_else(|| format!("goal '{goal_id}' not found"))?;
 
-    let content = std::fs::read_to_string(&active_path).map_err(|e| e.to_string())?;
+    let content = std::fs::read_to_string(&src_path).map_err(|e| e.to_string())?;
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let updated = content
-        .replacen("status: active", &format!("status: {status}"), 1)
-        .replacen("status: paused", &format!("status: {status}"), 1);
+    // Replace any existing status value
+    let updated = update_yaml_key(&content, "status", &status);
     let updated = if updated.contains("completion_date:") {
         updated
     } else {
@@ -213,9 +214,47 @@ pub async fn archive_goal(
     std::fs::create_dir_all(&archive_dir).map_err(|e| e.to_string())?;
     let archive_path = archive_dir.join(format!("{goal_id}.md"));
     std::fs::write(&archive_path, &updated).map_err(|e| e.to_string())?;
-    std::fs::remove_file(&active_path).map_err(|e| e.to_string())?;
+    if src_path != archive_path {
+        std::fs::remove_file(&src_path).map_err(|e| e.to_string())?;
+    }
 
     let path_str = archive_path.to_string_lossy().to_string();
+    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str).map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reactivate_goal(
+    goal_id: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    let archive_path = config.repo.join("goals").join("archive").join(format!("{goal_id}.md"));
+    if !archive_path.exists() {
+        return Err(format!("goal '{goal_id}' not found in goals/archive/"));
+    }
+
+    let content = std::fs::read_to_string(&archive_path).map_err(|e| e.to_string())?;
+    // Set status to active, remove completion_date line
+    let updated = update_yaml_key(&content, "status", "active");
+    let updated: String = updated
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("completion_date:"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let active_dir = config.repo.join("goals").join("active");
+    std::fs::create_dir_all(&active_dir).map_err(|e| e.to_string())?;
+    let active_path = active_dir.join(format!("{goal_id}.md"));
+    std::fs::write(&active_path, &updated).map_err(|e| e.to_string())?;
+    std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
+
+    let path_str = active_path.to_string_lossy().to_string();
     let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str).map_err(|e| e.to_string())?;
     let target = LocalSqlite::new(state.pool.clone());
     target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;

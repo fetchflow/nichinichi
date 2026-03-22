@@ -36,6 +36,14 @@ export function useGoals(status?: string, org?: string) {
     [load]
   );
 
+  const reactivateGoal = useCallback(
+    async (goalId: string) => {
+      await invoke("reactivate_goal", { goalId });
+      load();
+    },
+    [load]
+  );
+
   const updateGoalMeta = useCallback(
     async (
       goalId: string,
@@ -50,5 +58,5 @@ export function useGoals(status?: string, org?: string) {
     [load]
   );
 
-  return { goals, loading, error, reload: load, toggleStep, archiveGoal, updateGoalMeta };
+  return { goals, loading, error, reload: load, toggleStep, archiveGoal, reactivateGoal, updateGoalMeta };
 }

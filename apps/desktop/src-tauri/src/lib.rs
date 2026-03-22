@@ -33,6 +33,7 @@ pub fn run() {
             commands::get_goals,
             commands::update_goal_step,
             commands::archive_goal,
+            commands::reactivate_goal,
             commands::accept_suggestion,
             commands::dismiss_suggestion,
             commands::get_playbooks,
