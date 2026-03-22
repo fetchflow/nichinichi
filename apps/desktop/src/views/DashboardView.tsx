@@ -89,12 +89,12 @@ export function DashboardView({ activeOrg }: Props) {
           <div style={{ display: "flex", gap: "8px" }}>
             <MiniGraphCard
               title="weekly"
-              sub={activity.weekly[activity.weekly.length - 1]?.label ?? ""}
-              total={activity.weekly.reduce((s, w) => s + Object.values(w.entries).reduce((a, c) => a + c, 0), 0)}
+              sub={new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " week"}
+              total={activity.week_days.reduce((s, w) => s + Object.values(w.entries).reduce((a, c) => a + c, 0), 0)}
               onClick={() => setDrill("week")}
             >
               <RadialGraph
-                days={activity.weekly.map((w) => ({ label: w.label, entries: w.entries }))}
+                days={activity.week_days.map((w) => ({ label: w.label, entries: w.entries }))}
                 size="mini"
               />
             </MiniGraphCard>
@@ -270,7 +270,7 @@ function DrillView({
   onBack: () => void;
 }) {
   const cfg = {
-    week: { title: "this week", sub: "last 9 weeks" },
+    week: { title: "this week", sub: "Mon – Sun" },
     month: {
       title: "this month",
       sub: new Date().toLocaleString("default", { month: "long", year: "numeric" }),
@@ -359,7 +359,7 @@ function DrillView({
         <div style={{ display: "flex", justifyContent: "center" }}>
           {period === "week" && (
             <RadialGraph
-              days={activity.weekly.map((w) => ({ label: w.label, entries: w.entries }))}
+              days={activity.week_days.map((w) => ({ label: w.label, entries: w.entries }))}
               size="full"
             />
           )}
