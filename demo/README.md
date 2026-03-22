@@ -44,6 +44,7 @@ repo: /absolute/path/to/devlog-mark-02/demo/devlog
 | Active goals | staff engineer (career, @acme), distributed systems (learning, paused) |
 | Archived goal | learn TypeScript (done, with completion_date) |
 | All progress signals | breakthrough → strong → steady → moderate → struggling → quiet |
+| Progress entry refs | `refs:` in become-staff-engineer.md links specific log entries to progress updates |
 | Playbooks | memory leaks, feature checklist, incident runbook |
 | Digests | weekly, monthly, quarterly review |
 | Saved AI conversations | jwt bug query, auth decisions query |

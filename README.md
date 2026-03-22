@@ -12,8 +12,8 @@ Log daily work from the CLI or desktop app. All data lives as plain markdown fil
 - **Plain markdown** — all data is human-readable files you own
 - **Full-text search** — SQLite FTS5 index across all your entries
 - **AI assistant** — ask questions about your own work history using your Anthropic API key
-- **Goals tracking** — step-by-step goal files with progress signals
-- **Playbooks** — reusable runbooks stored as markdown
+- **Goals tracking** — step-by-step goal files with progress signals; steps and progress are editable in the desktop UI with write-back to markdown; progress entries can reference specific log entries via `refs:`
+- **Playbooks** — reusable runbooks stored as markdown; create, edit (split editor with live preview), and delete from the desktop UI
 - **Org filtering** — scope entries and AI queries to a project or client
 - **Private entries** — `.quiet/` files are never indexed or sent to AI
 - **Git-native backup** — commit and push `~/devlog/` to your own private remote
