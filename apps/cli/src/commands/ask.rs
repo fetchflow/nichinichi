@@ -30,7 +30,7 @@ pub async fn run(
 
     let client = AiClient::new(config.ai.clone());
     let response = client
-        .ask(query, &context, |chunk| {
+        .ask(query, &context, &[], |chunk| {
             print!("{chunk}");
             let _ = io::stdout().flush();
         })

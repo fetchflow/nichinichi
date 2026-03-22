@@ -1,5 +1,5 @@
 use crate::AiError;
-use nichinichi_types::{AiConfig, ParsedEntry};
+use nichinichi_types::{AiConfig, ChatMessage, ParsedEntry};
 use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -17,36 +17,75 @@ impl AiClient {
         }
     }
 
+    /// Fetch available model IDs from the Open WebUI `/api/models` endpoint.
+    pub async fn list_models(&self) -> Result<Vec<String>, AiError> {
+        let url = format!(
+            "{}/api/models",
+            self.config.base_url.trim_end_matches('/')
+        );
+        let resp = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.config.api_key))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AiError::Api { status, body });
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        let ids = json["data"]
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .filter_map(|m| m["id"].as_str().map(String::from))
+            .collect();
+
+        Ok(ids)
+    }
+
     /// Ask the AI a question, streaming the response.
     ///
+    /// `context_entries` are FTS5 results used to build the system prompt.
+    /// `history` is the prior conversation turns (user + assistant messages).
     /// `on_chunk` is called for each text delta as it arrives.
     /// Returns the full concatenated response text when done.
     pub async fn ask(
         &self,
         user_query: &str,
         context_entries: &[ParsedEntry],
+        history: &[ChatMessage],
         on_chunk: impl Fn(String),
     ) -> Result<String, AiError> {
         let system_prompt = build_system_prompt(context_entries);
 
-        let url = format!("{}/v1/messages", self.config.base_url.trim_end_matches('/'));
+        // Build messages: system prompt → conversation history → current user query
+        let mut messages: Vec<Value> = Vec::new();
+        messages.push(json!({"role": "system", "content": system_prompt}));
+        for msg in history {
+            messages.push(json!({"role": msg.role, "content": msg.content}));
+        }
+        messages.push(json!({"role": "user", "content": user_query}));
+
+        let url = format!(
+            "{}/api/chat/completions",
+            self.config.base_url.trim_end_matches('/')
+        );
 
         let body = json!({
             "model": self.config.model,
-            "max_tokens": 1024,
             "stream": true,
-            "system": system_prompt,
-            "messages": [
-                {"role": "user", "content": user_query}
-            ]
+            "messages": messages,
         });
 
         let response = self
             .client
             .post(&url)
-            .header("x-api-key", &self.config.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
+            .header("Authorization", format!("Bearer {}", self.config.api_key))
+            .header("Content-Type", "application/json")
             .json(&body)
             .send()
             .await?;
@@ -75,9 +114,9 @@ impl AiClient {
                         break;
                     }
                     if let Ok(parsed) = serde_json::from_str::<Value>(data) {
-                        if let Some(delta_text) = extract_delta_text(&parsed) {
-                            on_chunk(delta_text.clone());
-                            full_response.push_str(&delta_text);
+                        if let Some(text) = extract_delta_text(&parsed) {
+                            on_chunk(text.clone());
+                            full_response.push_str(&text);
                         }
                     }
                 }
@@ -115,13 +154,16 @@ fn build_system_prompt(entries: &[ParsedEntry]) -> String {
 }
 
 fn extract_delta_text(event: &Value) -> Option<String> {
-    // Anthropic SSE format:
-    // {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "..."}}
-    if event.get("type")?.as_str()? == "content_block_delta" {
-        let delta = event.get("delta")?;
-        if delta.get("type")?.as_str()? == "text_delta" {
-            return delta.get("text")?.as_str().map(String::from);
-        }
+    // OpenAI-compatible SSE format:
+    // {"choices":[{"delta":{"content":"..."},"finish_reason":null}]}
+    let content = event
+        .get("choices")?
+        .get(0)?
+        .get("delta")?
+        .get("content")?
+        .as_str()?;
+    if content.is_empty() {
+        return None;
     }
-    None
+    Some(content.to_string())
 }

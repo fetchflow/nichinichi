@@ -15,6 +15,11 @@ export function useAi() {
   const unlistenDone = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    // `cancelled` guards against React 18 strict-mode double-invoke:
+    // if cleanup runs before the listen() promise resolves, we immediately
+    // call the unlisten fn so we never end up with two active listeners.
+    let cancelled = false;
+
     listen<string>("ai-chunk", (event) => {
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -27,27 +32,31 @@ export function useAi() {
         return [...prev, { role: "assistant", content: event.payload }];
       });
     }).then((fn) => {
-      unlistenChunk.current = fn;
+      if (cancelled) fn();
+      else unlistenChunk.current = fn;
     });
 
     listen<string>("ai-done", (event) => {
       setStreaming(false);
       setLastResponse(event.payload);
     }).then((fn) => {
-      unlistenDone.current = fn;
+      if (cancelled) fn();
+      else unlistenDone.current = fn;
     });
 
     return () => {
+      cancelled = true;
       unlistenChunk.current?.();
       unlistenDone.current?.();
     };
   }, []);
 
-  const ask = useCallback(async (query: string, org?: string) => {
+  const ask = useCallback(async (query: string, org?: string, model?: string) => {
+    const history = messages; // capture prior turns before state update
     setMessages((prev) => [...prev, { role: "user", content: query }]);
     setStreaming(true);
     try {
-      await invoke("ai_ask", { query, org: org ?? null });
+      await invoke("ai_ask", { query, history, org: org ?? null, model: model ?? null });
     } catch (e) {
       setStreaming(false);
       setMessages((prev) => [
@@ -55,7 +64,7 @@ export function useAi() {
         { role: "assistant", content: `Error: ${String(e)}` },
       ]);
     }
-  }, []);
+  }, [messages]);
 
   const save = useCallback(
     async (org?: string) => {

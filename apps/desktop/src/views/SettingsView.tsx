@@ -16,8 +16,19 @@ interface Props {
 
 export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspaces, onWorkspacesChange }: Props) {
   const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    invoke<{ base_url: string; model: string }>("get_ai_config")
+      .then(({ base_url, model }) => {
+        if (base_url) setBaseUrl(base_url);
+        if (model) setModel(model);
+      })
+      .catch(() => {});
+  }, []);
 
   const { timezone, setTimezone, resetToSystem } = useTimezone();
   const systemTz = systemTimezone();
@@ -154,9 +165,13 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
     if (!apiKey.trim()) return;
     setSaving(true);
     try {
-      await invoke("save_ai_key", { apiKey: apiKey.trim() });
+      await invoke("save_ai_config", {
+        apiKey: apiKey.trim(),
+        baseUrl: baseUrl.trim() || "http://localhost:3000",
+        model: model.trim() || "llama3.2",
+      });
       setSaved(true);
-      setApiKey("");
+      setApiKey(""); // clear key field only — base_url and model remain visible
       setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
@@ -170,15 +185,38 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
         <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">AI Settings</h2>
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-gray-500 block mb-1">
-              Anthropic API Key
-            </label>
+            <label className="text-xs text-gray-500 block mb-1">Base URL</label>
+            <input
+              type="text"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="http://localhost:3000"
+              className="w-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
+                         border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
+            />
+            <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
+              Open WebUI URL — requests go to {"{base_url}"}/api/chat/completions
+            </p>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Model</label>
+            <input
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="llama3.2"
+              className="w-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
+                         border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">API Key</label>
             <div className="flex gap-2">
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-ant-..."
+                placeholder="sk-..."
                 className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
                            border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
               />
