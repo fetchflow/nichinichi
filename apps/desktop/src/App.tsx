@@ -47,20 +47,20 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100 select-none overflow-hidden">
+    <div className="flex h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 select-none overflow-hidden">
       {/* Sidebar nav */}
-      <aside className="w-48 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
-        <div className="px-4 py-4 border-b border-gray-800">
-          <span className="text-sm font-semibold text-gray-200">DevLog</span>
+      <aside className="w-48 flex-shrink-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
+        <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-800">
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">DevLog</span>
         </div>
 
         {/* Org switcher */}
-        <div className="px-3 py-3 border-b border-gray-800">
+        <div className="px-3 py-3 border-b border-gray-200 dark:border-gray-800">
           <select
             value={activeOrg}
             onChange={(e) => setActiveOrg(e.target.value)}
-            className="w-full bg-gray-800 text-gray-300 text-xs rounded px-2 py-1.5
-                       border border-gray-700 focus:outline-none"
+            className="w-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs rounded px-2 py-1.5
+                       border border-gray-300 dark:border-gray-700 focus:outline-none"
           >
             <option value="all">All</option>
             <option value="personal">Personal</option>
@@ -80,8 +80,8 @@ export default function App() {
               onClick={() => setSection(id)}
               className={`w-full text-left px-4 py-2 text-sm transition-colors ${
                 section === id
-                  ? "bg-gray-800 text-gray-200"
-                  : "text-gray-500 hover:text-gray-300 hover:bg-gray-800/50"
+                  ? "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                  : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
               }`}
             >
               {label}
@@ -94,8 +94,8 @@ export default function App() {
       <main className="flex flex-1 min-w-0 overflow-hidden">
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           {/* Top bar */}
-          <header className="flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
-            <span className="text-sm font-medium text-gray-300 capitalize">
+          <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
               {section}
             </span>
 
@@ -104,14 +104,14 @@ export default function App() {
               onClick={sync.syncNow}
               disabled={sync.syncing}
               title={sync.syncing ? "Syncing…" : "Click to sync now"}
-              className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-400
+              className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400
                          disabled:cursor-default transition-colors font-mono"
             >
               <span
                 className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                   sync.syncing
                     ? "bg-violet-500 animate-pulse"
-                    : "bg-gray-700"
+                    : "bg-gray-300 dark:bg-gray-700"
                 }`}
               />
               {sync.syncing
@@ -145,7 +145,7 @@ export default function App() {
         </div>
 
         {/* AI panel — always visible, 280px */}
-        <div className="w-72 flex-shrink-0 flex flex-col overflow-hidden">
+        <div className="w-72 flex-shrink-0 flex flex-col overflow-hidden bg-white dark:bg-gray-900">
           <AskPanel
             messages={ai.messages}
             streaming={ai.streaming}

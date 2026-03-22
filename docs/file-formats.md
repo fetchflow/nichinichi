@@ -73,7 +73,13 @@ created: 2026-01-05
 
 ### 2026-03-17
 signal: strong
-note: Strong impact signal this week.
+note: Strong impact signal this week. Shipping with measurable outcomes
+and documented decisions are exactly the staff-level evidence to accumulate.
+refs: [2026-03-17 11:32, 2026-03-17 16:48]
+
+### 2026-03-10
+signal: moderate
+note: One mentorship entry. Early signal in the right direction.
 ```
 
 **Frontmatter fields:** `type` (career|learning), `org`, `horizon`, `status`
@@ -82,6 +88,11 @@ archive)
 
 **Progress signals:** `breakthrough`, `strong`, `steady`, `moderate`,
 `struggling`, `quiet`
+
+**`refs:`** optional list of log entry timestamps (`YYYY-MM-DD HH:MM`) linking
+specific daily entries to a progress update. The desktop UI shows the entry
+body inline next to each ref. Refs are written as `refs: [2026-03-17 11:32, 2026-03-17 16:48]`
+and match the `date` + `time` columns in the entries table.
 
 ## Playbook file (`playbooks/slug.md`)
 

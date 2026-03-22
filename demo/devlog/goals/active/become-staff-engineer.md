@@ -15,7 +15,7 @@ created: 2026-01-05
       notes: David's auth PR — Mar 2026. He drove the design, I reviewed and guided.
 - [x] lead a cross-team technical initiative
       notes: permissions system spans acme API, mobile, and devlog platform — 3 teams.
-- [ ] write and publish a technical design doc reviewed by senior leadership
+- [x] write and publish a technical design doc reviewed by senior leadership
       notes: permissions doc drafted, sent to Maria for review
       due: 2026-04-15
 - [ ] drive a reliability improvement that reduces oncall burden measurably
@@ -29,12 +29,14 @@ note: Two staff-level milestones hit in the same week. Mentored David through th
 PR end to end — he owned the design, I guided. And the cross-team permissions initiative
 is now the most visible project across three teams. This is exactly the evidence the
 staff track requires.
+refs: [2026-03-17 11:32, 2026-03-17 16:48]
 
 ### 2026-03-10
 signal: strong
 note: Incident response this week was textbook. Identified root cause, shipped hotfix,
 drafted postmortem action items, and got them all assigned. That's staff-level ownership
 of a production incident.
+refs: [2026-03-10 11:15, 2026-03-10 16:00]
 
 ### 2026-03-03
 signal: steady

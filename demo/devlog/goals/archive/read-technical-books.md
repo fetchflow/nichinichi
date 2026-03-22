@@ -1,9 +1,10 @@
 ---
 type: learning
 horizon: end of 2026
-status: active
+status: abandoned
 why: stay sharp on fundamentals and broaden knowledge outside day-to-day work
 created: 2026-01-10
+completion_date: 2026-03-21
 ---
 
 # read 12 technical books this year

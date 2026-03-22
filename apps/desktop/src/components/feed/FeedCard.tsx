@@ -19,7 +19,7 @@ export function FeedCard({ entry }: Props) {
   const label = TYPE_LABELS[entry.entry_type];
 
   return (
-    <div className="group px-4 py-3 hover:bg-gray-800/50 transition-colors border-b border-gray-800/50">
+    <div className="group px-4 py-3 hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-colors border-b border-gray-200/50 dark:border-gray-800/50">
       <div className="flex items-start gap-3">
         {/* Time + type indicator */}
         <div className="flex flex-col items-end shrink-0 w-16 pt-0.5">
@@ -37,7 +37,7 @@ export function FeedCard({ entry }: Props) {
 
         {/* Body */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-gray-200 leading-relaxed">{entry.body}</p>
+          <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">{entry.body}</p>
           {entry.detail && (
             <p className="text-xs text-gray-500 mt-1 leading-relaxed whitespace-pre-line">
               {entry.detail}
@@ -47,14 +47,14 @@ export function FeedCard({ entry }: Props) {
           {/* Pills */}
           <div className="flex flex-wrap gap-1.5 mt-1.5">
             {entry.org && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">
+              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
                 @{entry.org}
               </span>
             )}
             {entry.tags.map((tag) => (
               <span
                 key={tag}
-                className="text-xs px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-500"
+                className="text-xs px-1.5 py-0.5 rounded bg-gray-200/50 dark:bg-gray-700/50 text-gray-500"
               >
                 #{tag}
               </span>

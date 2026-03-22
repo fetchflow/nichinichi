@@ -36,7 +36,7 @@ export function MomentumGraph({ weeks }: Props) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-        <div style={{ fontSize: "9px", color: "#6b7280", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px" }}>
+        <div style={{ fontSize: "9px", color: "var(--c-text-muted)", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px" }}>
           momentum · last {weeks.length} weeks
         </div>
         {pctChange !== null && (
@@ -76,7 +76,7 @@ export function MomentumGraph({ weeks }: Props) {
             cx={p.x}
             cy={p.y}
             r="2.5"
-            fill="#1f2937"
+            style={{ fill: "var(--c-surface-2)" }}
             stroke="#534AB7"
             strokeWidth="1.5"
           />
@@ -86,12 +86,12 @@ export function MomentumGraph({ weeks }: Props) {
         <div
           style={{
             padding: "7px 9px",
-            background: "#111827",
+            background: "var(--c-surface-1)",
             borderRadius: "7px",
             borderLeft: "2px solid #534AB7",
             marginTop: "6px",
             fontSize: "10px",
-            color: "#9ca3af",
+            color: "var(--c-text-muted)",
             fontFamily: "monospace",
             lineHeight: "1.7",
           }}

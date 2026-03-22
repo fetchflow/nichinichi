@@ -169,19 +169,78 @@ pub async fn get_goals(
 
 #[tauri::command]
 pub async fn update_goal_step(
+    app: tauri::AppHandle,
     step_id: String,
     done: bool,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
     let state = state.lock().await;
-    let status = if done { "done" } else { "not_started" };
-    sqlx::query("UPDATE goal_steps SET status = ? WHERE id = ?")
-        .bind(status)
-        .bind(&step_id)
-        .execute(&state.pool)
-        .await
+
+    // Fetch the goal_id for this step so we can locate the file
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT goal_id FROM goal_steps WHERE id = ?")
+            .bind(&step_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    let goal_id = row.ok_or("step not found")?.0;
+
+    let file_path = find_goal_file(&state.config, &goal_id)
+        .ok_or_else(|| format!("goal '{goal_id}' not found"))?;
+
+    let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let updated = toggle_step_in_file(&content, &step_id, done, &state.pool).await?;
+    std::fs::write(&file_path, &updated).map_err(|e| e.to_string())?;
+
+    let path_str = file_path.to_string_lossy().to_string();
+    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str)
         .map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
     Ok(())
+}
+
+async fn toggle_step_in_file(
+    content: &str,
+    step_id: &str,
+    done: bool,
+    pool: &sqlx::SqlitePool,
+) -> Result<String, String> {
+    // Fetch the step title so we can find the right line
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT title FROM goal_steps WHERE id = ?")
+            .bind(step_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    let title = row.ok_or("step not found")?.0;
+
+    let checkbox_done = if done { "[x]" } else { "[ ]" };
+    let checkbox_other = if done { "[ ]" } else { "[x]" };
+
+    // Replace the first checkbox line that matches the step title
+    let mut replaced = false;
+    let updated: Vec<String> = content
+        .lines()
+        .map(|line| {
+            if !replaced {
+                let trimmed = line.trim_start();
+                if (trimmed.starts_with(&format!("- {checkbox_other} {title}"))
+                    || trimmed.starts_with(&format!("- [ ] {title}"))
+                    || trimmed.starts_with(&format!("- [x] {title}")))
+                    && trimmed.ends_with(title.trim_end())
+                {
+                    replaced = true;
+                    let indent = &line[..line.len() - trimmed.len()];
+                    return format!("{indent}- {checkbox_done} {title}");
+                }
+            }
+            line.to_string()
+        })
+        .collect();
+    Ok(updated.join("\n"))
 }
 
 #[tauri::command]
@@ -193,16 +252,17 @@ pub async fn archive_goal(
     let state = state.lock().await;
     let config = &state.config;
 
-    let active_path = config.repo.join("goals").join("active").join(format!("{goal_id}.md"));
-    if !active_path.exists() {
-        return Err(format!("goal '{}' not found in goals/active/", goal_id));
-    }
+    // Accept from either active or archive (e.g. paused → done)
+    let src_path = ["active", "archive"]
+        .iter()
+        .map(|d| config.repo.join("goals").join(d).join(format!("{goal_id}.md")))
+        .find(|p| p.exists())
+        .ok_or_else(|| format!("goal '{goal_id}' not found"))?;
 
-    let content = std::fs::read_to_string(&active_path).map_err(|e| e.to_string())?;
+    let content = std::fs::read_to_string(&src_path).map_err(|e| e.to_string())?;
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let updated = content
-        .replacen("status: active", &format!("status: {status}"), 1)
-        .replacen("status: paused", &format!("status: {status}"), 1);
+    // Replace any existing status value
+    let updated = update_yaml_key(&content, "status", &status);
     let updated = if updated.contains("completion_date:") {
         updated
     } else {
@@ -213,9 +273,47 @@ pub async fn archive_goal(
     std::fs::create_dir_all(&archive_dir).map_err(|e| e.to_string())?;
     let archive_path = archive_dir.join(format!("{goal_id}.md"));
     std::fs::write(&archive_path, &updated).map_err(|e| e.to_string())?;
-    std::fs::remove_file(&active_path).map_err(|e| e.to_string())?;
+    if src_path != archive_path {
+        std::fs::remove_file(&src_path).map_err(|e| e.to_string())?;
+    }
 
     let path_str = archive_path.to_string_lossy().to_string();
+    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str).map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reactivate_goal(
+    goal_id: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    let archive_path = config.repo.join("goals").join("archive").join(format!("{goal_id}.md"));
+    if !archive_path.exists() {
+        return Err(format!("goal '{goal_id}' not found in goals/archive/"));
+    }
+
+    let content = std::fs::read_to_string(&archive_path).map_err(|e| e.to_string())?;
+    // Set status to active, remove completion_date line
+    let updated = update_yaml_key(&content, "status", "active");
+    let updated: String = updated
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("completion_date:"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let active_dir = config.repo.join("goals").join("active");
+    std::fs::create_dir_all(&active_dir).map_err(|e| e.to_string())?;
+    let active_path = active_dir.join(format!("{goal_id}.md"));
+    std::fs::write(&active_path, &updated).map_err(|e| e.to_string())?;
+    std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
+
+    let path_str = active_path.to_string_lossy().to_string();
     let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str).map_err(|e| e.to_string())?;
     let target = LocalSqlite::new(state.pool.clone());
     target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
@@ -749,6 +847,429 @@ pub async fn save_ai_key(
     };
 
     std::fs::write(&config_path, updated).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── Config repo path ───────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_config_repo(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<String, String> {
+    let state = state.lock().await;
+    Ok(state.config.repo.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub async fn save_config_repo(
+    path: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let mut state = state.lock().await;
+
+    let home = dirs::home_dir().ok_or("cannot find home directory")?;
+    let config_path = home.join(".devlog.yml");
+    let content = if config_path.exists() {
+        std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?
+    } else {
+        format!(
+            "repo: ~/devlog\nai:\n  base_url: https://api.anthropic.com\n  api_key: \"\"\n  model: claude-sonnet-4-5\n"
+        )
+    };
+
+    let updated = if content.contains("repo:") {
+        let mut lines: Vec<String> = content.lines().map(String::from).collect();
+        for line in &mut lines {
+            if line.trim_start().starts_with("repo:") {
+                *line = format!("repo: {path}");
+                break;
+            }
+        }
+        lines.join("\n")
+    } else {
+        format!("repo: {path}\n") + &content
+    };
+
+    std::fs::write(&config_path, updated).map_err(|e| e.to_string())?;
+
+    // Update in-memory config
+    state.config.repo = std::path::PathBuf::from(path.replace("~/", &format!("{}/", home.display())));
+
+    Ok(())
+}
+
+// ── Goal metadata editing ──────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn update_goal_meta(
+    app: tauri::AppHandle,
+    goal_id: String,
+    title: String,
+    goal_type: Option<String>,
+    horizon: Option<String>,
+    why: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Goal, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    // Find the goal file by scanning goals directories
+    let file_path = find_goal_file(config, &goal_id)
+        .ok_or_else(|| format!("goal '{goal_id}' not found"))?;
+
+    let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+
+    let updated = update_yaml_key(&content, "type", goal_type.as_deref().unwrap_or(""));
+    let updated = update_yaml_key(&updated, "horizon", horizon.as_deref().unwrap_or(""));
+    let updated = update_yaml_key(&updated, "why", why.as_deref().unwrap_or(""));
+    let updated = update_h1_title(&updated, &title);
+
+    std::fs::write(&file_path, &updated).map_err(|e| e.to_string())?;
+
+    // Re-sync from the updated file
+    let target = LocalSqlite::new(state.pool.clone());
+    let path_str = file_path.to_string_lossy().to_string();
+    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str)
+        .map_err(|e| e.to_string())?;
+    target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(goal)
+}
+
+fn find_goal_file(config: &devlog_types::Config, goal_id: &str) -> Option<std::path::PathBuf> {
+    for subdir in &["active", "archive"] {
+        let p = config.repo.join("goals").join(subdir).join(format!("{goal_id}.md"));
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn update_yaml_key(content: &str, key: &str, value: &str) -> String {
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    let mut found = false;
+    for line in &mut lines {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with(&format!("{key}:")) {
+            if value.is_empty() {
+                *line = format!("{}:", key);
+            } else {
+                *line = format!("{key}: {value}");
+            }
+            found = true;
+            break;
+        }
+    }
+    if !found && !value.is_empty() {
+        // Insert before closing --- of frontmatter
+        let mut in_fm = false;
+        let mut inserted = false;
+        let mut result = Vec::new();
+        for line in lines {
+            if line == "---" {
+                if !in_fm {
+                    in_fm = true;
+                    result.push(line);
+                } else if !inserted {
+                    result.push(format!("{key}: {value}"));
+                    result.push(line);
+                    inserted = true;
+                } else {
+                    result.push(line);
+                }
+            } else {
+                result.push(line);
+            }
+        }
+        return result.join("\n");
+    }
+    lines.join("\n")
+}
+
+fn update_h1_title(content: &str, title: &str) -> String {
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    for line in &mut lines {
+        if line.starts_with("# ") && !line.starts_with("## ") {
+            *line = format!("# {title}");
+            break;
+        }
+    }
+    lines.join("\n")
+}
+
+// ── Goal content editing (steps + progress) ────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct StepInput {
+    pub title: String,
+    pub done: bool,
+    pub notes: Option<String>,
+    pub due_date: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct ProgressInput {
+    pub date: String,
+    pub signal: String,
+    pub note: Option<String>,
+    #[serde(default)]
+    pub refs: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn save_goal_content(
+    app: tauri::AppHandle,
+    goal_id: String,
+    steps: Vec<StepInput>,
+    progress: Vec<ProgressInput>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Goal, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    let file_path = find_goal_file(config, &goal_id)
+        .ok_or_else(|| format!("goal '{goal_id}' not found"))?;
+
+    let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let updated = replace_steps_section(&content, &steps);
+    let updated = replace_progress_section(&updated, &progress);
+
+    std::fs::write(&file_path, &updated).map_err(|e| e.to_string())?;
+
+    let path_str = file_path.to_string_lossy().to_string();
+    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str)
+        .map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(goal)
+}
+
+fn replace_steps_section(content: &str, steps: &[StepInput]) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+
+    // Find the ## steps heading
+    let steps_start = lines.iter().position(|l| l.trim() == "## steps");
+    let Some(steps_start) = steps_start else {
+        // No steps section — append one before ## progress or at end
+        let progress_pos = lines.iter().position(|l| l.trim() == "## progress");
+        let insert_at = progress_pos.unwrap_or(lines.len());
+        let mut result: Vec<String> = lines[..insert_at].iter().map(|l| l.to_string()).collect();
+        result.push(String::new());
+        result.push("## steps".to_string());
+        result.push(String::new());
+        for step in steps {
+            serialize_step_into(&mut result, step);
+        }
+        result.push(String::new());
+        for l in &lines[insert_at..] {
+            result.push(l.to_string());
+        }
+        return result.join("\n");
+    };
+
+    // Find end of steps section (next ## heading or EOF)
+    let steps_end = lines[steps_start + 1..]
+        .iter()
+        .position(|l| l.starts_with("## "))
+        .map(|i| steps_start + 1 + i)
+        .unwrap_or(lines.len());
+
+    let mut result: Vec<String> = lines[..steps_start].iter().map(|l| l.to_string()).collect();
+    result.push("## steps".to_string());
+    result.push(String::new());
+    for step in steps {
+        serialize_step_into(&mut result, step);
+    }
+    if steps_end < lines.len() {
+        result.push(String::new());
+        for l in &lines[steps_end..] {
+            result.push(l.to_string());
+        }
+    }
+    result.join("\n")
+}
+
+fn serialize_step_into(out: &mut Vec<String>, step: &StepInput) {
+    let checkbox = if step.done { "[x]" } else { "[ ]" };
+    out.push(format!("- {checkbox} {}", step.title));
+    if let Some(notes) = &step.notes {
+        if !notes.is_empty() {
+            out.push(format!("      notes: {notes}"));
+        }
+    }
+    if let Some(due) = &step.due_date {
+        if !due.is_empty() {
+            out.push(format!("      due: {due}"));
+        }
+    }
+}
+
+fn replace_progress_section(content: &str, progress: &[ProgressInput]) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+
+    let progress_start = lines.iter().position(|l| l.trim() == "## progress");
+
+    let mut result: Vec<String>;
+    if let Some(ps) = progress_start {
+        result = lines[..ps].iter().map(|l| l.to_string()).collect();
+    } else {
+        result = lines.iter().map(|l| l.to_string()).collect();
+        // Trim trailing blank lines before appending
+        while result.last().map(|l: &String| l.is_empty()) == Some(true) {
+            result.pop();
+        }
+    }
+
+    if !progress.is_empty() {
+        result.push(String::new());
+        result.push("## progress".to_string());
+        result.push(String::new());
+        for (i, entry) in progress.iter().enumerate() {
+            result.push(format!("### {}", entry.date));
+            result.push(format!("signal: {}", entry.signal));
+            if let Some(note) = &entry.note {
+                if !note.is_empty() {
+                    result.push(format!("note: {note}"));
+                }
+            }
+            if !entry.refs.is_empty() {
+                result.push(format!("refs: [{}]", entry.refs.join(", ")));
+            }
+            if i + 1 < progress.len() {
+                result.push(String::new());
+            }
+        }
+    }
+
+    // Ensure file ends with a single newline
+    let mut s = result.join("\n");
+    if !s.ends_with('\n') {
+        s.push('\n');
+    }
+    s
+}
+
+// ── Playbook editing ────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn save_playbook(
+    app: tauri::AppHandle,
+    id: String,
+    title: String,
+    tags: Vec<String>,
+    content: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Playbook, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    // Find the playbook file
+    let pb_dir = config.repo.join("playbooks");
+    let file_path = pb_dir.join(format!("{id}.md"));
+    if !file_path.exists() {
+        return Err(format!("playbook '{id}' not found"));
+    }
+
+    // Read existing file to preserve org/forked_from/created metadata
+    let existing = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let path_str = file_path.to_string_lossy().to_string();
+    let old_pb = devlog_parser::playbook::parse_playbook_file(&existing, &path_str)
+        .map_err(|e| e.to_string())?;
+
+    let tags_str = tags.join(", ");
+    let org_val = old_pb.org.as_deref().unwrap_or("null");
+    let fork_val = old_pb.forked_from.as_deref().unwrap_or("null");
+    let created_val = old_pb.created_at.as_deref().unwrap_or("");
+
+    let new_file = format!(
+        "---\ntitle: {title}\ntags: [{tags_str}]\nforked_from: {fork_val}\norg: {org_val}\ncreated: {created_val}\n---\n\n{content}\n"
+    );
+
+    std::fs::write(&file_path, &new_file).map_err(|e| e.to_string())?;
+
+    let target = LocalSqlite::new(state.pool.clone());
+    let pb = devlog_parser::playbook::parse_playbook_file(&new_file, &path_str)
+        .map_err(|e| e.to_string())?;
+    target.upsert_playbook(&pb).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(pb)
+}
+
+
+#[tauri::command]
+pub async fn create_playbook(
+    app: tauri::AppHandle,
+    title: String,
+    org: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Playbook, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+    let pb_dir = config.repo.join("playbooks");
+
+    let slug: String = title
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let slug = if slug.is_empty() { "untitled".to_string() } else { slug };
+
+    let mut file_path = pb_dir.join(format!("{slug}.md"));
+    let mut counter = 1u32;
+    while file_path.exists() {
+        file_path = pb_dir.join(format!("{slug}-{counter}.md"));
+        counter += 1;
+    }
+
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let org_val = org.as_deref().unwrap_or("null");
+    let content = format!(
+        "---\ntitle: {title}\ntags: []\nforked_from: null\norg: {org_val}\ncreated: {today}\n---\n\n## steps\n\n"
+    );
+
+    std::fs::create_dir_all(&pb_dir).map_err(|e| e.to_string())?;
+    std::fs::write(&file_path, &content).map_err(|e| e.to_string())?;
+
+    let path_str = file_path.to_string_lossy().to_string();
+    let pb = devlog_parser::playbook::parse_playbook_file(&content, &path_str)
+        .map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_playbook(&pb).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(pb)
+}
+
+#[tauri::command]
+pub async fn delete_playbook(
+    app: tauri::AppHandle,
+    id: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let state = state.lock().await;
+    let config = &state.config;
+    let file_path = config.repo.join("playbooks").join(format!("{id}.md"));
+
+    if file_path.exists() {
+        std::fs::remove_file(&file_path).map_err(|e| e.to_string())?;
+    }
+
+    sqlx::query("DELETE FROM playbooks WHERE id = ?")
+        .bind(&id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
     Ok(())
 }
 

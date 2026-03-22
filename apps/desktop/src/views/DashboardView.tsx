@@ -59,7 +59,7 @@ export function DashboardView({ activeOrg }: Props) {
 
       {/* Heatmap */}
       <section>
-        <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-medium text-gray-500 dark:text-gray-500 uppercase tracking-wider mb-3">
           Activity
         </h2>
         {statsLoading ? (
@@ -74,7 +74,7 @@ export function DashboardView({ activeOrg }: Props) {
         {activityLoading ? (
           <SkeletonBlock lines={2} />
         ) : activity && activity.weekly.length > 0 ? (
-          <div style={{ border: "1px solid #374151", borderRadius: "10px", padding: "11px 13px", background: "#1f2937" }}>
+          <div style={{ border: "1px solid var(--c-border)", borderRadius: "10px", padding: "11px 13px", background: "var(--c-surface-2)" }}>
             <MomentumGraph weeks={activity.weekly} />
           </div>
         ) : null}
@@ -83,7 +83,7 @@ export function DashboardView({ activeOrg }: Props) {
       {/* Progress mini-graph cards */}
       {!activityLoading && activity && (
         <section>
-          <div style={{ fontSize: "9px", color: "#6b7280", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+          <div style={{ fontSize: "9px", color: "var(--c-text-muted)", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
             progress · click to explore
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
@@ -123,7 +123,7 @@ export function DashboardView({ activeOrg }: Props) {
       {/* Entry type breakdown */}
       {stats && (
         <section>
-          <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+          <h2 className="text-xs font-medium text-gray-500 dark:text-gray-500 uppercase tracking-wider mb-3">
             Entry types (90d)
           </h2>
           <div className="flex flex-wrap gap-2">
@@ -146,18 +146,18 @@ export function DashboardView({ activeOrg }: Props) {
 
       {/* Today's entries */}
       <section>
-        <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-medium text-gray-500 dark:text-gray-500 uppercase tracking-wider mb-3">
           Today
         </h2>
         {entriesLoading ? (
           <SkeletonBlock />
         ) : todayEntries.length === 0 ? (
-          <p className="text-sm text-gray-600">No entries yet today.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-600">No entries yet today.</p>
         ) : (
           <div className="space-y-1">
             {todayEntries.map((e) => (
-              <div key={e.id} className="text-sm text-gray-400">
-                <span className="text-gray-600 tabular-nums mr-2">{e.time}</span>
+              <div key={e.id} className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="text-gray-400 dark:text-gray-600 tabular-nums mr-2">{e.time}</span>
                 {e.body}
               </div>
             ))}
@@ -167,13 +167,13 @@ export function DashboardView({ activeOrg }: Props) {
 
       {/* Goals snapshot */}
       <section>
-        <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-medium text-gray-500 dark:text-gray-500 uppercase tracking-wider mb-3">
           Goals
         </h2>
         {goalsLoading ? (
           <SkeletonBlock />
         ) : goals.length === 0 ? (
-          <p className="text-sm text-gray-600">No active goals.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-600">No active goals.</p>
         ) : (
           <div className="space-y-3">
             {goals.slice(0, 3).map((goal) => {
@@ -183,12 +183,12 @@ export function DashboardView({ activeOrg }: Props) {
               return (
                 <div key={goal.id}>
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-300">{goal.title}</span>
+                    <span className="text-gray-700 dark:text-gray-300">{goal.title}</span>
                     <span className="text-gray-500">
                       {done}/{total}
                     </span>
                   </div>
-                  <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-1 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-green-500 rounded-full"
                       style={{ width: `${pct}%` }}
@@ -226,10 +226,10 @@ function MiniGraphCard({
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        border: `1px solid ${hov ? "#534AB7" : "#374151"}`,
+        border: `1px solid ${hov ? "#534AB7" : "var(--c-border)"}`,
         borderRadius: "10px",
         padding: "12px",
-        background: "#1f2937",
+        background: "var(--c-surface-2)",
         cursor: "pointer",
         transition: "border-color 0.15s",
         flex: 1,
@@ -238,19 +238,19 @@ function MiniGraphCard({
     >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "8px" }}>
         <div>
-          <div style={{ fontSize: "9px", color: "#6b7280", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px" }}>
+          <div style={{ fontSize: "9px", color: "var(--c-text-muted)", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px" }}>
             {title}
           </div>
-          <div style={{ fontSize: "8px", color: "#4b5563", fontFamily: "monospace" }}>{sub}</div>
+          <div style={{ fontSize: "8px", color: "var(--c-text-muted)", fontFamily: "monospace", opacity: 0.7 }}>{sub}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: "#e5e7eb", fontFamily: "monospace", lineHeight: 1 }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--c-text-primary)", fontFamily: "monospace", lineHeight: 1 }}>
               {total}
             </div>
-            <div style={{ fontSize: "7px", color: "#6b7280" }}>entries</div>
+            <div style={{ fontSize: "7px", color: "var(--c-text-muted)" }}>entries</div>
           </div>
-          <span style={{ color: hov ? "#534AB7" : "#4b5563" }}>→</span>
+          <span style={{ color: hov ? "#534AB7" : "var(--c-text-muted)" }}>→</span>
         </div>
       </div>
       <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>{children}</div>
@@ -313,7 +313,7 @@ function DrillView({
             alignItems: "center",
             gap: "3px",
             fontSize: "11px",
-            color: "#6b7280",
+            color: "var(--c-text-muted)",
             background: "none",
             border: "none",
             cursor: "pointer",
@@ -323,11 +323,11 @@ function DrillView({
         >
           ← dashboard
         </button>
-        <span style={{ color: "#374151" }}>·</span>
-        <span style={{ fontSize: "11px", fontWeight: 600, color: "#e5e7eb", fontFamily: "monospace" }}>
+        <span style={{ color: "var(--c-border)" }}>·</span>
+        <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--c-text-primary)", fontFamily: "monospace" }}>
           {cfg.title}
         </span>
-        <span style={{ fontSize: "10px", color: "#6b7280", fontFamily: "monospace" }}>{cfg.sub}</span>
+        <span style={{ fontSize: "10px", color: "var(--c-text-muted)", fontFamily: "monospace" }}>{cfg.sub}</span>
       </div>
 
       {/* Stats grid */}
@@ -336,24 +336,24 @@ function DrillView({
           <div
             key={label}
             style={{
-              border: "1px solid #374151",
+              border: "1px solid var(--c-border)",
               borderRadius: "8px",
               padding: "10px",
-              background: "#1f2937",
+              background: "var(--c-surface-2)",
               textAlign: "center",
             }}
           >
-            <div style={{ fontSize: "20px", fontWeight: 700, color: "#e5e7eb", fontFamily: "monospace", lineHeight: 1 }}>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "var(--c-text-primary)", fontFamily: "monospace", lineHeight: 1 }}>
               {val}
             </div>
-            <div style={{ fontSize: "9px", color: "#6b7280", marginTop: "3px" }}>{label}</div>
+            <div style={{ fontSize: "9px", color: "var(--c-text-muted)", marginTop: "3px" }}>{label}</div>
           </div>
         ))}
       </div>
 
       {/* Full-size graph */}
-      <div style={{ border: "1px solid #374151", borderRadius: "10px", padding: "14px 16px", background: "#1f2937" }}>
-        <div style={{ fontSize: "9px", color: "#6b7280", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "10px" }}>
+      <div style={{ border: "1px solid var(--c-border)", borderRadius: "10px", padding: "14px 16px", background: "var(--c-surface-2)" }}>
+        <div style={{ fontSize: "9px", color: "var(--c-text-muted)", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "10px" }}>
           {period === "week" ? "radial" : period === "month" ? "stream" : "swimlane"} · {cfg.sub}
         </div>
         <div style={{ display: "flex", justifyContent: "center" }}>
@@ -381,12 +381,12 @@ function StatCard({
   value: string | null;
 }) {
   return (
-    <div className="bg-gray-800/50 rounded-lg p-4">
+    <div className="bg-gray-100/50 dark:bg-gray-800/50 rounded-lg p-4">
       <p className="text-xs text-gray-500 mb-1">{label}</p>
       {value === null ? (
         <SkeletonRow width="60%" />
       ) : (
-        <p className="text-2xl font-semibold text-gray-200">{value}</p>
+        <p className="text-2xl font-semibold text-gray-800 dark:text-gray-200">{value}</p>
       )}
     </div>
   );

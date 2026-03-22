@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Theme } from "../hooks/useTheme";
 
 interface Props {
@@ -13,6 +13,29 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Repo path
+  const [repoPath, setRepoPath] = useState("");
+  const [savingRepo, setSavingRepo] = useState(false);
+  const [savedRepo, setSavedRepo] = useState(false);
+  const [restartNeeded, setRestartNeeded] = useState(false);
+
+  useEffect(() => {
+    invoke<string>("get_config_repo").then(setRepoPath).catch(() => {});
+  }, []);
+
+  const handleSaveRepo = async () => {
+    if (!repoPath.trim()) return;
+    setSavingRepo(true);
+    try {
+      await invoke("save_config_repo", { path: repoPath.trim() });
+      setSavedRepo(true);
+      setRestartNeeded(true);
+      setTimeout(() => setSavedRepo(false), 2000);
+    } finally {
+      setSavingRepo(false);
+    }
+  };
 
   // Admin gate — click "Data" heading 5× rapidly to reveal danger zone
   const [adminVisible, setAdminVisible] = useState(false);
@@ -67,7 +90,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
     <div className="flex-1 overflow-y-auto p-6 max-w-lg space-y-8">
       {/* AI Settings */}
       <section>
-        <h2 className="text-sm font-medium text-gray-300 mb-4">AI Settings</h2>
+        <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">AI Settings</h2>
         <div className="space-y-3">
           <div>
             <label className="text-xs text-gray-500 block mb-1">
@@ -79,19 +102,19 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="sk-ant-..."
-                className="flex-1 bg-gray-800 text-gray-200 text-sm rounded px-3 py-2
-                           border border-gray-700 focus:outline-none focus:border-gray-500"
+                className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
+                           border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
               />
               <button
                 onClick={handleSaveKey}
                 disabled={!apiKey.trim() || saving}
-                className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-40
-                           text-gray-200 text-sm rounded transition-colors"
+                className="px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40
+                           text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
               >
                 {saved ? "Saved!" : saving ? "Saving…" : "Save"}
               </button>
             </div>
-            <p className="text-xs text-gray-600 mt-1">
+            <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
               Saved to ~/.devlog.yml · never sent anywhere else
             </p>
           </div>
@@ -100,7 +123,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
 
       {/* Appearance */}
       <section>
-        <h2 className="text-sm font-medium text-gray-300 mb-4">Appearance</h2>
+        <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Appearance</h2>
         <div className="flex gap-2">
           {(["dark", "light"] as Theme[]).map((t) => (
             <button
@@ -108,8 +131,8 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
               onClick={() => onThemeChange(t)}
               className={`px-3 py-1.5 rounded text-sm transition-colors ${
                 theme === t
-                  ? "bg-gray-600 text-gray-200"
-                  : "bg-gray-800 text-gray-500 hover:bg-gray-700"
+                  ? "bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
               {t}
@@ -122,22 +145,50 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
       <section>
         {/* Clicking the heading 5× reveals the admin/danger zone */}
         <h2
-          className="text-sm font-medium text-gray-300 mb-4 cursor-default select-none"
+          className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 cursor-default select-none"
           onClick={handleDataHeadingClick}
         >
           Data
         </h2>
-        <div className="space-y-2">
+        <div className="space-y-3">
+          {/* Repo path */}
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Devlog folder</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={repoPath}
+                onChange={(e) => setRepoPath(e.target.value)}
+                placeholder="~/devlog"
+                className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
+                           border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+              />
+              <button
+                onClick={handleSaveRepo}
+                disabled={!repoPath.trim() || savingRepo}
+                className="px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40
+                           text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+              >
+                {savedRepo ? "Saved!" : savingRepo ? "Saving…" : "Save"}
+              </button>
+            </div>
+            {restartNeeded && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                Restart DevLog to load the new folder.
+              </p>
+            )}
+          </div>
+
           <button
             onClick={syncNow}
             disabled={syncing}
-            className="block w-full text-left px-3 py-2 bg-gray-800 hover:bg-gray-700
-                       disabled:opacity-50 text-sm text-gray-300 rounded transition-colors"
+            className="block w-full text-left px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700
+                       disabled:opacity-50 text-sm text-gray-700 dark:text-gray-300 rounded transition-colors"
           >
             {syncing ? "Syncing…" : "Sync now"}
           </button>
         </div>
-        <p className="text-xs text-gray-600 mt-2">
+        <p className="text-xs text-gray-400 dark:text-gray-600 mt-2">
           The database is always reconstructable from your markdown files.
         </p>
 
@@ -158,7 +209,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
                           transition-colors disabled:opacity-50 font-mono ${
                 confirmRebuild
                   ? "bg-red-900/60 text-red-300 border border-red-700"
-                  : "bg-gray-800 hover:bg-red-900/30 text-red-400 border border-gray-700 hover:border-red-800"
+                  : "bg-gray-100 dark:bg-gray-800 hover:bg-red-900/30 text-red-400 border border-gray-300 dark:border-gray-700 hover:border-red-800"
               }`}
             >
               {rebuilding

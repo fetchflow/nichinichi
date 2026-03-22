@@ -36,5 +36,39 @@ export function useGoals(status?: string, org?: string) {
     [load]
   );
 
-  return { goals, loading, error, reload: load, toggleStep, archiveGoal };
+  const reactivateGoal = useCallback(
+    async (goalId: string) => {
+      await invoke("reactivate_goal", { goalId });
+      load();
+    },
+    [load]
+  );
+
+  const updateGoalMeta = useCallback(
+    async (
+      goalId: string,
+      title: string,
+      goalType: string | null,
+      horizon: string | null,
+      why: string | null
+    ) => {
+      await invoke("update_goal_meta", { goalId, title, goalType, horizon, why });
+      load();
+    },
+    [load]
+  );
+
+  const saveGoalContent = useCallback(
+    async (
+      goalId: string,
+      steps: { title: string; done: boolean; notes?: string; due_date?: string }[],
+      progress: { date: string; signal: string; note?: string; refs?: string[] }[]
+    ) => {
+      await invoke("save_goal_content", { goalId, steps, progress });
+      load();
+    },
+    [load]
+  );
+
+  return { goals, loading, error, reload: load, toggleStep, archiveGoal, reactivateGoal, updateGoalMeta, saveGoalContent };
 }

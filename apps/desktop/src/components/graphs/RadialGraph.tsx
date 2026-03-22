@@ -74,7 +74,7 @@ export function RadialGraph({ days, size = "mini" }: Props) {
           >
             <path
               d={`M ${x1} ${y1} L ${x2} ${y2} A ${r} ${r} 0 0 1 ${x3} ${y3} L ${x4} ${y4} A ${minR} ${minR} 0 0 0 ${x1} ${y1} Z`}
-              fill={t === 0 ? "#374151" : (TYPE_COLORS as Record<string, string>)[dom]}
+              fill={t === 0 ? "var(--c-arc-empty)" : (TYPE_COLORS as Record<string, string>)[dom]}
               opacity={
                 hov === null
                   ? t === 0
@@ -93,7 +93,7 @@ export function RadialGraph({ days, size = "mini" }: Props) {
               dominantBaseline="central"
               fontFamily="monospace"
               fontSize={fontSize}
-              fill={hov === i ? "#e5e7eb" : "#4b5563"}
+              fill={hov === i ? "var(--c-text-primary)" : "var(--c-text-muted)"}
               fontWeight={hov === i ? "700" : "400"}
             >
               {d.label}
@@ -101,14 +101,14 @@ export function RadialGraph({ days, size = "mini" }: Props) {
           </g>
         );
       })}
-      <circle cx={cx} cy={cy} r={minR - 3} fill="#1f2937" />
+      <circle cx={cx} cy={cy} r={minR - 3} style={{ fill: "var(--c-surface-1)" }} />
       <text
         x={cx}
         y={cy - 4}
         textAnchor="middle"
         fontFamily="monospace"
         fontSize={size === "mini" ? 11 : 16}
-        fill="#e5e7eb"
+        fill="var(--c-text-primary)"
         fontWeight="700"
       >
         {hov !== null ? tot(days[hov].entries) : total}
@@ -119,7 +119,7 @@ export function RadialGraph({ days, size = "mini" }: Props) {
         textAnchor="middle"
         fontFamily="monospace"
         fontSize={size === "mini" ? 6 : 7}
-        fill="#6b7280"
+        fill="var(--c-text-muted)"
       >
         {hov !== null ? days[hov].label : "total"}
       </text>
