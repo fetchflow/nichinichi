@@ -84,21 +84,55 @@ All prior turns are sent as history on every request, so the model can refer bac
 
 ## Creating journal entries from chat
 
-Ask the AI to log something and it will suggest a formatted entry:
+You can ask the AI to create journal entries directly from the chat panel. The AI will suggest one or more formatted entries as interactive cards — review them, then click **Add to journal** to log each one.
 
-> "Log that I fixed the auth middleware bug @acme"
-> "Create a score entry for shipping the billing page"
+### How to ask
 
-The AI responds with an amber **entry card** showing the proposed body text. Click **Add to journal** to create the entry with the current timestamp. The button shows **Added ✓** on success.
+Be direct about what you want logged. You can mention an org (`@acme`), a type (`#solution`, `#score`, etc.), or leave them out and the AI will infer them from context.
 
-The entry format the AI uses internally:
-
+**Single entry:**
 ```
-nichinichi-entry
-body text @org #type
+Log that I fixed the auth middleware bug @acme
 ```
 
-This is a standard fenced code block with a custom language tag that the chat panel intercepts and renders as an interactive card. The timestamp is added automatically by the `add_entry` command.
+**Multiple entries at once:**
+```
+Create 3 entries for today: fixed a bug in the auth middleware,
+reviewed a PR from a teammate, and joined standup @acme
+```
+
+**With a specific type:**
+```
+Add a #solution entry for solving the memory leak in the worker process @acme
+```
+
+**Let the AI infer everything:**
+```
+I spent the morning debugging a race condition and finally found the fix.
+Log that for me.
+```
+
+**Logging a decision:**
+```
+We decided to use Postgres over MySQL for the new service. Log that as a decision @acme
+```
+
+### Entry cards
+
+Each suggested entry appears as an amber card showing the entry body text. Cards behave as follows:
+
+- **Add to journal** — logs the entry with the current timestamp and disables the button permanently
+- **Added ✓** — the button turns green and is disabled; the entry has been written to today's file
+- If the add fails, a red error message appears next to the button
+
+You can add some entries and skip others — each card is independent.
+
+### Tips
+
+- You can ask for entries in bulk: _"Create entries for everything I described in this conversation"_
+- The AI will not invent org or type tags unless you specify them or they are clear from context
+- The timestamp is always the current time when you click **Add to journal**, not the time mentioned in the conversation
+- Entries are added to `~/nichinichi/YYYY-MM-DD.md` (today's file) and indexed into SQLite immediately
 
 ---
 
