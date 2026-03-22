@@ -6,14 +6,19 @@ import type { AiMessage } from "../../hooks/useAi";
 
 function EntryBlock({ text }: { text: string }) {
   const [added, setAdded] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
   const handleAdd = async () => {
+    if (added || loading) return;
+    setLoading(true);
     try {
       await invoke("add_entry", { text: text.trim() });
       setAdded(true);
     } catch {
       setError(true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -25,14 +30,16 @@ function EntryBlock({ text }: { text: string }) {
       <div className="px-3 py-2 border-t border-amber-200 dark:border-amber-800/50 flex items-center gap-2">
         <button
           onClick={handleAdd}
-          disabled={added}
+          disabled={added || loading}
           className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
             ${added
               ? "bg-green-500 opacity-50 cursor-not-allowed"
+              : loading
+              ? "bg-amber-400 opacity-50 cursor-not-allowed"
               : "bg-amber-500 hover:bg-amber-600 cursor-pointer"
             }`}
         >
-          {added ? "Added ✓" : "Add to journal"}
+          {added ? "Added ✓" : loading ? "Adding…" : "Add to journal"}
         </button>
         {error && <span className="text-xs text-red-500">Failed to add entry</span>}
       </div>
