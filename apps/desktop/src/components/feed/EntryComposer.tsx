@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 interface Props {
-  onSubmit: (text: string) => Promise<void>;
+  onSubmit: (text: string) => Promise<unknown>;
 }
 
 export function EntryComposer({ onSubmit }: Props) {
