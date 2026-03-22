@@ -553,6 +553,41 @@ pub async fn load_ai_conversation_cmd(
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub async fn delete_ai_conversation_cmd(file_path: String) -> Result<(), String> {
+    tokio::fs::remove_file(&file_path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn archive_ai_conversation_cmd(file_path: String) -> Result<(), String> {
+    let src = std::path::PathBuf::from(&file_path);
+    let filename = src.file_name().ok_or("invalid path")?;
+    let archive_dir = src.parent().ok_or("no parent dir")?.join("archive");
+    tokio::fs::create_dir_all(&archive_dir)
+        .await
+        .map_err(|e| e.to_string())?;
+    tokio::fs::rename(&src, archive_dir.join(filename))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn retitle_ai_conversation_cmd(
+    file_path: String,
+    title: String,
+) -> Result<(), String> {
+    let path = std::path::PathBuf::from(&file_path);
+    let content = tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| e.to_string())?;
+    let updated = replace_yaml_field(&content, "query", &title);
+    tokio::fs::write(&path, updated)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 // ── Stats ──────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]

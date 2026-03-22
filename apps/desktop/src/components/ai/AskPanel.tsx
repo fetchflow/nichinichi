@@ -27,6 +27,9 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onSave, onClea
   const [selectedModel, setSelectedModel] = useState("");
   const [history, setHistory] = useState<AiConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameInput, setRenameInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -63,6 +66,13 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onSave, onClea
     setInput("");
   };
 
+  const refreshHistory = () => {
+    const org = activeOrg === "all" ? null : activeOrg;
+    invoke<AiConversationSummary[]>("get_ai_conversations", { org })
+      .then(setHistory)
+      .catch(() => {});
+  };
+
   const handleLoadConversation = async (conv: AiConversationSummary) => {
     try {
       const loaded = await invoke<AiMessage[]>("load_ai_conversation_cmd", {
@@ -73,6 +83,33 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onSave, onClea
     } catch {
       // ignore load errors
     }
+  };
+
+  const handleDelete = async (conv: AiConversationSummary) => {
+    setMenuOpen(null);
+    await invoke("delete_ai_conversation_cmd", { filePath: conv.file_path }).catch(() => {});
+    refreshHistory();
+  };
+
+  const handleArchive = async (conv: AiConversationSummary) => {
+    setMenuOpen(null);
+    await invoke("archive_ai_conversation_cmd", { filePath: conv.file_path }).catch(() => {});
+    refreshHistory();
+  };
+
+  const handleRenameStart = (conv: AiConversationSummary) => {
+    setMenuOpen(null);
+    setRenamingId(conv.id);
+    setRenameInput(conv.query);
+  };
+
+  const handleRenameSubmit = async (conv: AiConversationSummary) => {
+    const title = renameInput.trim();
+    if (title && title !== conv.query) {
+      await invoke("retitle_ai_conversation_cmd", { filePath: conv.file_path, title }).catch(() => {});
+      refreshHistory();
+    }
+    setRenamingId(null);
   };
 
   return (
@@ -154,16 +191,76 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onSave, onClea
           ) : (
             <ul className="divide-y divide-gray-100 dark:divide-gray-800">
               {history.map((conv) => (
-                <li key={conv.id}>
-                  <button
-                    onClick={() => handleLoadConversation(conv)}
-                    className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
-                  >
-                    <p className="text-xs text-gray-400 dark:text-gray-600 mb-0.5">{conv.date}</p>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 leading-snug">
-                      {conv.query}
-                    </p>
-                  </button>
+                <li key={conv.id} className="relative group">
+                  {renamingId === conv.id ? (
+                    <div className="px-4 py-3">
+                      <p className="text-xs text-gray-400 dark:text-gray-600 mb-1">{conv.date}</p>
+                      <input
+                        autoFocus
+                        value={renameInput}
+                        onChange={(e) => setRenameInput(e.target.value)}
+                        onBlur={() => handleRenameSubmit(conv)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleRenameSubmit(conv);
+                          if (e.key === "Escape") setRenamingId(null);
+                        }}
+                        className="w-full text-sm bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200
+                                   border border-gray-300 dark:border-gray-600 rounded px-2 py-1 focus:outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-start">
+                      <button
+                        onClick={() => handleLoadConversation(conv)}
+                        className="flex-1 text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors min-w-0"
+                      >
+                        <p className="text-xs text-gray-400 dark:text-gray-600 mb-0.5">{conv.date}</p>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 leading-snug">
+                          {conv.query}
+                        </p>
+                      </button>
+                      <div className="relative flex-shrink-0 pt-2.5 pr-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === conv.id ? null : conv.id); }}
+                          className="p-1 rounded text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400
+                                     opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+                          </svg>
+                        </button>
+                        {menuOpen === conv.id && (
+                          <div
+                            className="absolute right-0 top-8 z-10 w-32 bg-white dark:bg-gray-800 border border-gray-200
+                                       dark:border-gray-700 rounded shadow-lg text-sm overflow-hidden"
+                            onMouseLeave={() => setMenuOpen(null)}
+                          >
+                            <button
+                              onClick={() => handleRenameStart(conv)}
+                              className="w-full text-left px-3 py-2 text-gray-700 dark:text-gray-300
+                                         hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                              Rename
+                            </button>
+                            <button
+                              onClick={() => handleArchive(conv)}
+                              className="w-full text-left px-3 py-2 text-gray-700 dark:text-gray-300
+                                         hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                              Archive
+                            </button>
+                            <button
+                              onClick={() => handleDelete(conv)}
+                              className="w-full text-left px-3 py-2 text-red-500
+                                         hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
