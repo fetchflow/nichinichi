@@ -1,4 +1,4 @@
-use nichinichi_ai::{save_conversation, search_entries, AiClient};
+use nichinichi_ai::{list_conversations, load_conversation, save_conversation, search_entries, AiClient};
 use nichinichi_sync::{rebuild_from_disk, sync_incremental, LocalSqlite, SyncTarget};
 use nichinichi_types::{ChatMessage, Config, Goal, OrgScope, ParsedEntry, Playbook};
 use serde::Serialize;
@@ -515,8 +515,7 @@ pub async fn ai_ask(
 
 #[tauri::command]
 pub async fn save_ai_conversation_cmd(
-    query: String,
-    response: String,
+    messages: Vec<ChatMessage>,
     org: Option<String>,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
@@ -524,10 +523,69 @@ pub async fn save_ai_conversation_cmd(
         let state = state.lock().await;
         state.config.repo.clone()
     };
-    save_conversation(&repo, &query, &response, org.as_deref(), None)
+    save_conversation(&repo, &messages, org.as_deref(), None)
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_ai_conversations(
+    org: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<nichinichi_types::AiConversation>, String> {
+    let repo = {
+        let state = state.lock().await;
+        state.config.repo.clone()
+    };
+    list_conversations(&repo, org.as_deref())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn load_ai_conversation_cmd(
+    file_path: String,
+) -> Result<Vec<ChatMessage>, String> {
+    let path = std::path::PathBuf::from(&file_path);
+    load_conversation(&path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_ai_conversation_cmd(file_path: String) -> Result<(), String> {
+    tokio::fs::remove_file(&file_path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn archive_ai_conversation_cmd(file_path: String) -> Result<(), String> {
+    let src = std::path::PathBuf::from(&file_path);
+    let filename = src.file_name().ok_or("invalid path")?;
+    let archive_dir = src.parent().ok_or("no parent dir")?.join("archive");
+    tokio::fs::create_dir_all(&archive_dir)
+        .await
+        .map_err(|e| e.to_string())?;
+    tokio::fs::rename(&src, archive_dir.join(filename))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn retitle_ai_conversation_cmd(
+    file_path: String,
+    title: String,
+) -> Result<(), String> {
+    let path = std::path::PathBuf::from(&file_path);
+    let content = tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| e.to_string())?;
+    let updated = replace_yaml_field(&content, "query", &title);
+    tokio::fs::write(&path, updated)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ── Stats ──────────────────────────────────────────────────────────────────

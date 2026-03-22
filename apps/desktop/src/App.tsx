@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AskPanel } from "./components/ai/AskPanel";
 import { useAi } from "./hooks/useAi";
 import { useOrg } from "./hooks/useOrg";
@@ -32,9 +32,15 @@ function relativeTime(date: Date): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+const AI_PANEL_MIN = 240;
+const AI_PANEL_MAX = 640;
+const AI_PANEL_DEFAULT = 288; // w-72 = 18rem = 288px
+
 export default function App() {
   const [section, setSection] = useState<Section>("dashboard");
   const [aiOpen, setAiOpen] = useState(false);
+  const [aiWidth, setAiWidth] = useState(AI_PANEL_DEFAULT);
+  const isResizing = useRef(false);
   const { theme, setTheme } = useTheme();
   const { activeOrg, setActiveOrg, orgs, workspaces, setWorkspaces } = useOrg();
   const ai = useAi();
@@ -166,17 +172,38 @@ export default function App() {
           </div>
         </div>
 
-        {/* AI panel — toggleable, default collapsed */}
+        {/* AI panel — toggleable, resizable */}
         {aiOpen && (
-          <div className="w-72 flex-shrink-0 flex flex-col overflow-hidden bg-white dark:bg-gray-900">
+          <div
+            className="flex-shrink-0 flex overflow-hidden relative bg-white dark:bg-gray-900"
+            style={{ width: aiWidth }}
+          >
+            {/* Drag handle */}
+            <div
+              className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 hover:bg-amber-400/40 transition-colors"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                isResizing.current = true;
+                (e.target as HTMLElement).setPointerCapture(e.pointerId);
+              }}
+              onPointerMove={(e) => {
+                if (!isResizing.current) return;
+                const newWidth = window.innerWidth - e.clientX;
+                setAiWidth(Math.min(AI_PANEL_MAX, Math.max(AI_PANEL_MIN, newWidth)));
+              }}
+              onPointerUp={() => { isResizing.current = false; }}
+            />
+            <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
             <AskPanel
               messages={ai.messages}
               streaming={ai.streaming}
+              activeOrg={activeOrg}
               onAsk={(q, model) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg, model)}
-              onSave={() => ai.save(activeOrg === "all" ? undefined : activeOrg)}
               onClear={ai.clear}
               onClose={() => setAiOpen(false)}
+              onLoad={ai.loadConversation}
             />
+            </div>
           </div>
         )}
       </main>

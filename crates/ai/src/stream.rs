@@ -133,6 +133,8 @@ fn build_system_prompt(entries: &[ParsedEntry]) -> String {
          You have access to the developer's journal entries below. Answer questions about their \
          work history, decisions, and patterns based solely on this context.\n\n\
          If you cannot find relevant information in the entries, say so clearly.\n\n\
+         Always format your responses using Markdown. Use headers, bullet points, bold, \
+         code blocks, and tables where appropriate to make the response easy to scan.\n\n\
          ## Journal Entries\n\n",
     );
 
