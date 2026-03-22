@@ -945,6 +945,17 @@ pub async fn get_config_repo(
 }
 
 #[tauri::command]
+pub async fn get_ai_config(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<serde_json::Value, String> {
+    let state = state.lock().await;
+    Ok(serde_json::json!({
+        "base_url": state.config.ai.base_url,
+        "model": state.config.ai.model,
+    }))
+}
+
+#[tauri::command]
 pub async fn save_config_repo(
     path: String,
     state: State<'_, Mutex<AppState>>,

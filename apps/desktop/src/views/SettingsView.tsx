@@ -21,6 +21,15 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  useEffect(() => {
+    invoke<{ base_url: string; model: string }>("get_ai_config")
+      .then(({ base_url, model }) => {
+        if (base_url) setBaseUrl(base_url);
+        if (model) setModel(model);
+      })
+      .catch(() => {});
+  }, []);
+
   const { timezone, setTimezone, resetToSystem } = useTimezone();
   const systemTz = systemTimezone();
   const isCustomTz = timezone !== systemTz;
@@ -162,7 +171,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
         model: model.trim() || "llama3.2",
       });
       setSaved(true);
-      setApiKey("");
+      setApiKey(""); // clear key field only — base_url and model remain visible
       setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
