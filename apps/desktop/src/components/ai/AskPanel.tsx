@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useState } from "react";
 import type { AiMessage } from "../../hooks/useAi";
 
 interface Props {
   messages: AiMessage[];
   streaming: boolean;
-  onAsk: (query: string) => void;
+  onAsk: (query: string, model: string) => void;
   onSave: () => void;
   onClear: () => void;
   onClose: () => void;
@@ -12,12 +13,23 @@ interface Props {
 
 export function AskPanel({ messages, streaming, onAsk, onSave, onClear, onClose }: Props) {
   const [input, setInput] = useState("");
+  const [models, setModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState("");
+
+  useEffect(() => {
+    invoke<string[]>("get_models")
+      .then((list) => {
+        setModels(list);
+        if (list.length > 0 && !selectedModel) setSelectedModel(list[0]);
+      })
+      .catch(() => {}); // silently ignore if base_url not configured yet
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const q = input.trim();
     if (!q || streaming) return;
-    onAsk(q);
+    onAsk(q, selectedModel);
     setInput("");
   };
 
@@ -55,6 +67,23 @@ export function AskPanel({ messages, streaming, onAsk, onSave, onClear, onClose 
           </button>
         </div>
       </div>
+
+      {/* Model selector */}
+      {models.length > 0 && (
+        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            disabled={streaming}
+            className="w-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs rounded px-2 py-1.5
+                       border border-gray-300 dark:border-gray-700 focus:outline-none disabled:opacity-50"
+          >
+            {models.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">

@@ -43,12 +43,12 @@ export function useAi() {
     };
   }, []);
 
-  const ask = useCallback(async (query: string, org?: string) => {
+  const ask = useCallback(async (query: string, org?: string, model?: string) => {
     const history = messages; // capture prior turns before state update
     setMessages((prev) => [...prev, { role: "user", content: query }]);
     setStreaming(true);
     try {
-      await invoke("ai_ask", { query, history, org: org ?? null });
+      await invoke("ai_ask", { query, history, org: org ?? null, model: model ?? null });
     } catch (e) {
       setStreaming(false);
       setMessages((prev) => [
