@@ -360,7 +360,7 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
               </div>
             );
           })()}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto select-text">
           {messages.length === 0 ? (
             <p className="text-xs text-gray-400 dark:text-gray-600 text-center mt-12 px-4">
               Ask a question about your journal.
