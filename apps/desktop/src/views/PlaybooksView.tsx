@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { SkeletonBlock } from "../components/Skeleton";
 import type { Playbook } from "../types";
@@ -8,6 +9,63 @@ import type { Playbook } from "../types";
 interface Props {
   activeOrg: string;
 }
+
+const mdComponents: Components = {
+  h1: ({ children }) => (
+    <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 mt-6 mb-3 first:mt-0">{children}</h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mt-5 mb-2 first:mt-0 pb-1 border-b border-gray-200 dark:border-gray-800">{children}</h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-4 mb-1.5">{children}</h3>
+  ),
+  p: ({ children }) => (
+    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-3">{children}</p>
+  ),
+  ul: ({ children }) => (
+    <ul className="list-disc pl-5 space-y-1 mb-3 text-sm text-gray-600 dark:text-gray-400">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="list-decimal pl-5 space-y-1 mb-3 text-sm text-gray-600 dark:text-gray-400">{children}</ol>
+  ),
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  pre: ({ children }) => (
+    <pre className="bg-gray-100 dark:bg-gray-800 rounded-md p-3 overflow-x-auto text-xs font-mono mb-3 leading-relaxed">{children}</pre>
+  ),
+  code: ({ className, children }) => {
+    const isBlock = Boolean(className?.startsWith("language-"));
+    return isBlock ? (
+      <code className="text-gray-700 dark:text-gray-300 font-mono">{children}</code>
+    ) : (
+      <code className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-1 py-0.5 rounded text-xs font-mono">{children}</code>
+    );
+  },
+  strong: ({ children }) => (
+    <strong className="font-semibold text-gray-800 dark:text-gray-200">{children}</strong>
+  ),
+  em: ({ children }) => (
+    <em className="italic text-gray-500 dark:text-gray-400">{children}</em>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-2 border-gray-300 dark:border-gray-600 pl-3 italic text-gray-500 dark:text-gray-500 mb-3">{children}</blockquote>
+  ),
+  hr: () => <hr className="border-gray-200 dark:border-gray-800 my-4" />,
+  a: ({ children, href }) => (
+    <a href={href} className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>
+  ),
+  table: ({ children }) => (
+    <div className="overflow-x-auto mb-3">
+      <table className="text-sm w-full border-collapse">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 pb-1 pr-4">{children}</th>
+  ),
+  td: ({ children }) => (
+    <td className="text-sm text-gray-600 dark:text-gray-400 border-b border-gray-200/50 dark:border-gray-700/50 py-1 pr-4">{children}</td>
+  ),
+};
 
 export function PlaybooksView({ activeOrg }: Props) {
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
@@ -37,7 +95,6 @@ export function PlaybooksView({ activeOrg }: Props) {
     })
       .then((pbs) => {
         setPlaybooks(pbs);
-        // Keep selected in sync after reload
         setSelected((prev) => {
           if (!prev) return null;
           return pbs.find((p) => p.id === prev.id) ?? null;
@@ -108,8 +165,6 @@ export function PlaybooksView({ activeOrg }: Props) {
       const pb = await invoke<Playbook>("create_playbook", { title: newTitle.trim(), org });
       setPlaybooks((prev) => [pb, ...prev]);
       setSelected(pb);
-      setEditing(false);
-      // Open edit mode so the user can fill in content right away
       setEditTitle(pb.title);
       setEditTags("");
       setEditContent(pb.content ?? "");
@@ -150,7 +205,6 @@ export function PlaybooksView({ activeOrg }: Props) {
     <div className="flex flex-1 overflow-hidden">
       {/* ── Left: playbook list ── */}
       <div className="w-64 shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col overflow-hidden">
-        {/* New playbook */}
         <div className="p-2 border-b border-gray-200 dark:border-gray-800">
           {creating ? (
             <div className="flex gap-1">
@@ -184,7 +238,6 @@ export function PlaybooksView({ activeOrg }: Props) {
           )}
         </div>
 
-        {/* List */}
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {playbooks.length === 0 ? (
             <p className="text-xs text-gray-400 dark:text-gray-600 p-2 italic">No playbooks yet.</p>
@@ -215,9 +268,8 @@ export function PlaybooksView({ activeOrg }: Props) {
       <div className="flex-1 overflow-hidden flex flex-col">
         {selected ? (
           editing ? (
-            /* ── Split-view editor ── */
+            /* Split-view editor */
             <div className="flex flex-col flex-1 overflow-hidden">
-              {/* Toolbar */}
               <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
                 <input
                   autoFocus
@@ -247,7 +299,6 @@ export function PlaybooksView({ activeOrg }: Props) {
                 </button>
               </div>
 
-              {/* Editor + Preview side by side */}
               <div className="flex flex-1 overflow-hidden divide-x divide-gray-200 dark:divide-gray-800">
                 <textarea
                   value={editContent}
@@ -257,18 +308,15 @@ export function PlaybooksView({ activeOrg }: Props) {
                   spellCheck={false}
                 />
                 <div className="flex-1 overflow-y-auto px-6 py-4">
-                  <article className="prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-100 dark:prose-pre:bg-gray-900 prose-code:text-gray-700 dark:prose-code:text-gray-300">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {editContent || "*nothing yet*"}
-                    </ReactMarkdown>
-                  </article>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                    {editContent || "*nothing yet*"}
+                  </ReactMarkdown>
                 </div>
               </div>
             </div>
           ) : (
-            /* ── Read view ── */
+            /* Read view */
             <div className="flex-1 overflow-y-auto p-6">
-              {/* Header */}
               <div className="flex items-start justify-between mb-5">
                 <div>
                   <h2 className="text-lg font-medium text-gray-800 dark:text-gray-200">{selected.title}</h2>
@@ -302,10 +350,7 @@ export function PlaybooksView({ activeOrg }: Props) {
                       >
                         {deleting ? "deleting…" : "yes"}
                       </button>
-                      <button
-                        onClick={() => setConfirmDelete(false)}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
+                      <button onClick={() => setConfirmDelete(false)} className="text-gray-400 hover:text-gray-600">
                         no
                       </button>
                     </span>
@@ -320,12 +365,9 @@ export function PlaybooksView({ activeOrg }: Props) {
                 </div>
               </div>
 
-              {/* Rendered markdown */}
-              <article className="prose prose-sm dark:prose-invert max-w-none prose-pre:bg-gray-100 dark:prose-pre:bg-gray-900 prose-code:text-gray-700 dark:prose-code:text-gray-300">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {selected.content ?? ""}
-                </ReactMarkdown>
-              </article>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                {selected.content ?? ""}
+              </ReactMarkdown>
             </div>
           )
         ) : (
