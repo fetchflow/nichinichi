@@ -4,6 +4,48 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AiMessage } from "../../hooks/useAi";
 
+function EntryBlock({ text, added, onAdded }: { text: string; added: boolean; onAdded: (key: string) => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  const handleAdd = async () => {
+    if (added || loading) return;
+    setLoading(true);
+    try {
+      await invoke("add_entry", { text: text.trim() });
+      onAdded(text.trim());
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="my-2 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/10 overflow-hidden">
+      <div className="px-3 py-2 text-xs font-mono text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+        {text.trim()}
+      </div>
+      <div className="px-3 py-2 border-t border-amber-200 dark:border-amber-800/50 flex items-center gap-2">
+        <button
+          onClick={handleAdd}
+          disabled={added || loading}
+          className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
+            ${added
+              ? "bg-green-500 opacity-50 cursor-not-allowed"
+              : loading
+              ? "bg-amber-400 opacity-50 cursor-not-allowed"
+              : "bg-amber-500 hover:bg-amber-600 cursor-pointer"
+            }`}
+        >
+          {added ? "Added ✓" : loading ? "Adding…" : "Add to journal"}
+        </button>
+        {error && <span className="text-xs text-red-500">Failed to add entry</span>}
+      </div>
+    </div>
+  );
+}
+
 interface AiConversationSummary {
   id: string;
   date: string;
@@ -34,6 +76,7 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState("");
+  const [addedEntries, setAddedEntries] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -347,7 +390,25 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
                                   prose-headings:font-semibold prose-headings:my-2
                                   prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5
                                   text-gray-800 dark:text-gray-200">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code({ className, children }) {
+                          const lang = /language-(\w[\w-]*)/.exec(className ?? "")?.[1];
+                          if (lang === "nichinichi-entry") {
+                            const key = String(children).trim();
+                            return (
+                              <EntryBlock
+                                text={key}
+                                added={addedEntries.has(key)}
+                                onAdded={(k) => setAddedEntries((prev) => new Set(prev).add(k))}
+                              />
+                            );
+                          }
+                          return <code className={className}>{children}</code>;
+                        },
+                      }}
+                    >
                       {msg.content}
                     </ReactMarkdown>
                     {streaming && i === messages.length - 1 && (
