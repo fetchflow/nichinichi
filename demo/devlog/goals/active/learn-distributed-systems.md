@@ -2,7 +2,7 @@
 type: learning
 org: null
 horizon: end of 2026
-status: paused
+status: active
 why: distributed systems knowledge is foundational for the architecture work I want to do
 created: 2026-01-20
 ---
