@@ -26,8 +26,11 @@ function EntryBlock({ text }: { text: string }) {
         <button
           onClick={handleAdd}
           disabled={added}
-          className="text-xs px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-600 disabled:opacity-50
-                     text-white font-medium transition-colors"
+          className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
+            ${added
+              ? "bg-green-500 cursor-default"
+              : "bg-amber-500 hover:bg-amber-600 cursor-pointer"
+            }`}
         >
           {added ? "Added ✓" : "Add to journal"}
         </button>
