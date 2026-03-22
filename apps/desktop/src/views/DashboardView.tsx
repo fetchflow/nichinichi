@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Heatmap } from "../components/stats/Heatmap";
-import { MomentumGraph } from "../components/stats/MomentumGraph";
 import { RadialGraph } from "../components/graphs/RadialGraph";
 import { StreamGraph } from "../components/graphs/StreamGraph";
 import { SwimLaneGraph } from "../components/graphs/SwimLaneGraph";
@@ -70,17 +69,6 @@ export function DashboardView({ activeOrg }: Props) {
         ) : (
           <Heatmap cells={stats?.heatmap ?? []} timezone={timezone} />
         )}
-      </section>
-
-      {/* Momentum graph */}
-      <section>
-        {activityLoading ? (
-          <SkeletonBlock lines={2} />
-        ) : activity && activity.weekly.length > 0 ? (
-          <div style={{ border: "1px solid var(--c-border)", borderRadius: "10px", padding: "11px 13px", background: "var(--c-surface-2)" }}>
-            <MomentumGraph weeks={activity.weekly} />
-          </div>
-        ) : null}
       </section>
 
       {/* Progress mini-graph cards */}
