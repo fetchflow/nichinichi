@@ -11,8 +11,9 @@ export function EntryComposer({ onSubmit }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  type CustomTag = { name: string; color: string };
   const [orgs, setOrgs] = useState<string[]>([]);
-  const [customTags, setCustomTags] = useState<string[]>([]);
+  const [customTags, setCustomTags] = useState<CustomTag[]>([]);
 
   useEffect(() => {
     invoke<string[]>("get_orgs").then(setOrgs).catch(() => {});
@@ -97,7 +98,7 @@ export function EntryComposer({ onSubmit }: Props) {
             />
           ))}
           {customTags.map((tag) => (
-            <Chip key={tag} label={tag} onClick={() => insertToken(`#${tag}`)} />
+            <Chip key={tag.name} label={tag.name} onClick={() => insertToken(`#${tag.name}`)} color={tag.color} />
           ))}
         </ChipRow>
 

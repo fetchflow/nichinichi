@@ -55,13 +55,16 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
   };
 
   // Tags & project spaces
-  const [customTags, setCustomTags] = useState<string[]>([]);
+  type CustomTag = { name: string; color: string };
+  const [customTags, setCustomTags] = useState<CustomTag[]>([]);
   const [managedOrgs, setManagedOrgs] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#6366f1");
   const [newOrg, setNewOrg] = useState("");
   const [editingTag, setEditingTag] = useState<number | null>(null);
   const [editingOrg, setEditingOrg] = useState<number | null>(null);
   const [editTagVal, setEditTagVal] = useState("");
+  const [editTagColor, setEditTagColor] = useState("");
   const [editOrgVal, setEditOrgVal] = useState("");
 
   useEffect(() => {
@@ -71,7 +74,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
     }).catch(() => {});
   }, []);
 
-  const saveTags = (tags: string[]) => {
+  const saveTags = (tags: CustomTag[]) => {
     setCustomTags(tags);
     invoke("set_setting", { key: "custom_tags", value: JSON.stringify(tags) });
   };
@@ -82,10 +85,11 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
 
   const addTag = (e: FormEvent) => {
     e.preventDefault();
-    const t = newTag.trim().toLowerCase().replace(/\s+/g, "-");
-    if (!t || customTags.includes(t)) return;
-    saveTags([...customTags, t]);
+    const name = newTag.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!name || customTags.some((t) => t.name === name)) return;
+    saveTags([...customTags, { name, color: newTagColor }]);
     setNewTag("");
+    setNewTagColor("#6366f1");
   };
   const addOrg = (e: FormEvent) => {
     e.preventDefault();
@@ -96,10 +100,10 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
   };
 
   const commitTagEdit = (i: number) => {
-    const t = editTagVal.trim().toLowerCase().replace(/\s+/g, "-");
-    if (t && t !== customTags[i]) {
+    const name = editTagVal.trim().toLowerCase().replace(/\s+/g, "-");
+    if (name) {
       const next = [...customTags];
-      next[i] = t;
+      next[i] = { name, color: editTagColor };
       saveTags(next);
     }
     setEditingTag(null);
@@ -353,25 +357,41 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
             {customTags.map((tag, i) => (
               <div key={i} className="flex items-center gap-2">
                 {editingTag === i ? (
-                  <input
-                    autoFocus
-                    value={editTagVal}
-                    onChange={(e) => setEditTagVal(e.target.value)}
-                    onBlur={() => commitTagEdit(i)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") { e.preventDefault(); commitTagEdit(i); }
-                      if (e.key === "Escape") setEditingTag(null);
-                    }}
-                    className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
-                               border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
-                  />
+                  <>
+                    <input
+                      type="color"
+                      value={editTagColor}
+                      onChange={(e) => setEditTagColor(e.target.value)}
+                      className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent p-0"
+                      title="Pick a color"
+                    />
+                    <input
+                      autoFocus
+                      value={editTagVal}
+                      onChange={(e) => setEditTagVal(e.target.value)}
+                      onBlur={() => commitTagEdit(i)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); commitTagEdit(i); }
+                        if (e.key === "Escape") setEditingTag(null);
+                      }}
+                      className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                                 border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+                    />
+                  </>
                 ) : (
-                  <span
-                    className="flex-1 text-sm font-mono text-gray-700 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-gray-100"
-                    onClick={() => { setEditingTag(i); setEditTagVal(tag); }}
-                  >
-                    #{tag}
-                  </span>
+                  <>
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: tag.color }}
+                    />
+                    <span
+                      className="flex-1 text-sm font-mono cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ color: tag.color }}
+                      onClick={() => { setEditingTag(i); setEditTagVal(tag.name); setEditTagColor(tag.color); }}
+                    >
+                      #{tag.name}
+                    </span>
+                  </>
                 )}
                 <button
                   type="button"
@@ -384,6 +404,13 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
             ))}
           </div>
           <form onSubmit={addTag} className="flex gap-2">
+            <input
+              type="color"
+              value={newTagColor}
+              onChange={(e) => setNewTagColor(e.target.value)}
+              className="w-8 h-8 rounded cursor-pointer border border-gray-300 dark:border-gray-700 bg-transparent p-0.5"
+              title="Pick a color"
+            />
             <input
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
