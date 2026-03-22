@@ -264,7 +264,14 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
               Ask a question about your journal.
             </p>
           ) : (
-            messages.map((msg, i) => (
+            <>
+              {/* Conversation title — first user message */}
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 leading-snug line-clamp-2">
+                  {messages.find((m) => m.role === "user")?.content ?? ""}
+                </p>
+              </div>
+              {messages.map((msg, i) => (
               <div
                 key={i}
                 className={`px-4 py-4 border-b border-gray-100 dark:border-gray-800/60 ${
@@ -300,7 +307,8 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
                   </p>
                 )}
               </div>
-            ))
+              ))}
+            </>
           )}
 
           {/* Typing indicator */}
