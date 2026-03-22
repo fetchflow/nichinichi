@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { SkeletonBlock } from "../components/Skeleton";
 import { useGoals } from "../hooks/useGoals";
+import { useTimezone } from "../hooks/useTimezone";
+import { localDateStr } from "../utils/date";
 import type { Entry } from "../types";
 import { SIGNAL_COLORS } from "../types";
 
@@ -51,6 +53,7 @@ export function GoalsView({ activeOrg }: Props) {
     undefined,
     activeOrg
   );
+  const { timezone } = useTimezone();
 
   // Master-detail selection
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -86,7 +89,7 @@ export function GoalsView({ activeOrg }: Props) {
   // Progress state
   const [addingProgressId, setAddingProgressId] = useState<string | null>(null);
   const [progressDraft, setProgressDraft] = useState<ProgressDraft>({
-    date: new Date().toISOString().slice(0, 10),
+    date: localDateStr(new Date(), timezone),
     signal: "steady",
     note: "",
     refs: [],
@@ -176,7 +179,7 @@ export function GoalsView({ activeOrg }: Props) {
     const dates = Array.from({ length: 14 }, (_, i) => {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
-      return d.toISOString().slice(0, 10);
+      return localDateStr(d, timezone);
     });
     Promise.all(dates.map((date) => invoke<Entry[]>("get_entries", { date }).catch(() => [] as Entry[])))
       .then((results) => setRefCache(results.flat()))
@@ -185,7 +188,7 @@ export function GoalsView({ activeOrg }: Props) {
 
   const openAddProgress = (goalId: string) => {
     setAddingProgressId(goalId);
-    setProgressDraft({ date: new Date().toISOString().slice(0, 10), signal: "steady", note: "", refs: [] });
+    setProgressDraft({ date: localDateStr(new Date(), timezone), signal: "steady", note: "", refs: [] });
     setRefSearch("");
     setRefCache([]);
   };

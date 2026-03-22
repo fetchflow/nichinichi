@@ -1,11 +1,13 @@
+import { localDateStr } from "../../utils/date";
 import type { HeatmapCell } from "../../types";
 
 interface Props {
   cells: HeatmapCell[];
   weeks?: number;
+  timezone?: string;
 }
 
-export function Heatmap({ cells, weeks = 26 }: Props) {
+export function Heatmap({ cells, weeks = 26, timezone }: Props) {
   const cellMap = new Map(cells.map((c) => [c.date, c.count]));
   const today = new Date();
   const days: { date: string; count: number }[] = [];
@@ -13,7 +15,7 @@ export function Heatmap({ cells, weeks = 26 }: Props) {
   for (let i = weeks * 7 - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split("T")[0];
+    const dateStr = localDateStr(d, timezone);
     days.push({ date: dateStr, count: cellMap.get(dateStr) ?? 0 });
   }
 
