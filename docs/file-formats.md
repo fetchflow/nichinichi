@@ -128,6 +128,8 @@ generated: 2026-03-17T18:00:00
 
 ## Saved AI conversation (`ai/YYYY-MM-DD-slug.md`)
 
+Conversations are **auto-saved** after every AI response and can be browsed, resumed, renamed, archived, or deleted from the history panel in the desktop app.
+
 ```markdown
 ---
 type: ai-conversation
@@ -139,7 +141,34 @@ org: acme
 **you:** when did i fix a jwt bug
 
 **nichinichi:** Based on your entries: jwt refresh bug fixed March 17...
+
+**you:** what about the refresh token specifically?
+
+**nichinichi:** Looking more closely at your entries from that day...
 ```
+
+**Frontmatter fields:**
+- `query` — first user message (used as the conversation title; updated when renamed via the UI)
+- `org` — active org filter at the time the conversation was started
+- `date` — date the conversation was first saved
+
+The body serializes all turns as `**you:**` / `**nichinichi:**` blocks so conversations can be fully reconstructed and resumed.
+
+Archived conversations are moved to `ai/archive/`.
+
+## AI entry proposal (`nichinichi-entry` code block)
+
+When the AI is asked to create a journal entry, it responds with a fenced code block using the `nichinichi-entry` language tag:
+
+````markdown
+```nichinichi-entry
+fixed auth middleware bug, moved expiry check before decode @acme #solution
+```
+````
+
+The desktop chat panel intercepts this tag and renders an interactive entry card instead of a plain code block. Clicking **Add to journal** calls the `add_entry` Tauri command with the block content as the entry text; the timestamp is set to the current time automatically.
+
+**Format inside the block:** `body text @org #type #extra-tags` — same as the CLI entry format. The `@org` and `#type` fields are optional; the AI infers them from context or leaves them out if unspecified.
 
 ## Config file (`~/.nichinichi.yml`)
 

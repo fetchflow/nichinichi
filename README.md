@@ -11,7 +11,7 @@ Log daily work from the CLI or desktop app. All data lives as plain markdown fil
 - **CLI + desktop app** — log entries from the terminal or a native GUI
 - **Plain markdown** — all data is human-readable files you own
 - **Full-text search** — SQLite FTS5 index across all your entries
-- **AI assistant** — ask questions about your own work history using your Anthropic API key
+- **AI chat panel** — ask questions about your work history; ask the AI to create journal entries and add them with one click; responses stream with full markdown rendering; conversations auto-saved, browsable, and resumable
 - **Goals tracking** — step-by-step goal files with progress signals; steps and progress are editable in the desktop UI with write-back to markdown; progress entries can reference specific log entries via `refs:`
 - **Playbooks** — reusable runbooks stored as markdown; create, edit (split editor with live preview), and delete from the desktop UI
 - **Composer chip toolbar** — clickable chips for entry types (`#score`, `#solution`, etc.), custom tags, and workspaces (`@acme`) below the log input; clicking inserts the token at cursor
@@ -30,7 +30,7 @@ Log daily work from the CLI or desktop app. All data lives as plain markdown fil
 | Desktop UI | Tauri v2 + React 18 + TypeScript + Tailwind CSS |
 | CLI | `nichinichi` binary (clap) |
 | Database | SQLite via sqlx (reconstructable index) |
-| AI | Anthropic Claude API (SSE streaming) |
+| AI | OpenAI-compatible API — Open WebUI, Ollama, LiteLLM, or any provider |
 | Search | SQLite FTS5 |
 
 ---
@@ -55,7 +55,7 @@ nichinichi "fixed the JWT refresh bug @acme #solution"
 # Log with type inference (no tag needed)
 nichinichi "merged the feature branch @acme"   # → inferred: score
 
-# Ask a question (requires API key in ~/.nichinichi.yml)
+# Ask a question (requires AI config in ~/.nichinichi.yml)
 nichinichi ask "when did I fix something related to auth"
 
 # Goals
@@ -88,22 +88,52 @@ Nichinichi reads `~/.nichinichi.yml` on startup. The desktop Settings UI writes 
 
 ```yaml
 repo: ~/nichinichi        # where your markdown files live
-editor: vim           # $EDITOR fallback for CLI
+editor: vim               # $EDITOR fallback for CLI
 
 ai:
-  base_url: https://api.anthropic.com
-  api_key: ""         # enter via Settings UI or set AI_API_KEY env var
-  model: claude-sonnet-4-5
+  base_url: http://localhost:3000   # Open WebUI, Ollama, LiteLLM, etc.
+  api_key: ""                       # enter via Settings UI
+  model: llama3.2                   # any model loaded in your AI backend
 
 default_org: personal
 ```
 
+The AI client speaks the OpenAI-compatible chat completions format (`POST {base_url}/api/chat/completions`, `Authorization: Bearer {api_key}`). Any provider that implements this format works.
+
 **CLI env var fallbacks** (when no config file exists):
 ```bash
-export AI_API_KEY=sk-ant-...
-export AI_BASE_URL=https://api.anthropic.com
-export AI_MODEL=claude-sonnet-4-5
+export AI_API_KEY=...
+export AI_BASE_URL=http://localhost:3000
+export AI_MODEL=llama3.2
 ```
+
+---
+
+## AI chat
+
+The desktop app includes a collapsible, resizable AI panel (toggle with the sparkle icon in the top-right). See [docs/ai-chat.md](docs/ai-chat.md) for the full feature guide.
+
+**Querying your journal:**
+```
+when did I fix something related to auth?
+summarise my decisions this week @acme
+what patterns do I keep repeating?
+```
+
+**Creating entries from chat:**
+```
+Log that I fixed the auth middleware bug @acme
+Create 3 entries for today: fixed a bug, reviewed a PR, joined standup @acme
+Add a #solution entry for solving the memory leak in the worker process
+```
+
+The AI responds with an amber entry card for each suggested entry. Click **Add to journal** to log it instantly. The button turns green and stays disabled — one click per entry, no duplicates.
+
+**Other highlights:**
+- Responses stream in with full markdown rendering
+- Conversations are auto-saved to `~/nichinichi/ai/` after each response
+- Browse, resume, rename, archive, or delete past conversations via the clock icon
+- Multi-turn context — follow-up questions reference earlier turns
 
 ---
 
@@ -123,12 +153,13 @@ export AI_MODEL=claude-sonnet-4-5
 │   └── debugging-memory-leaks.md
 ├── digests/               # AI-generated weekly/monthly reviews
 │   └── 2026-03-17-weekly.md
-├── ai/                    # saved AI conversations (opt-in)
-│   └── 2026-03-17-jwt-refresh-pattern.md
+├── ai/                    # AI conversations (auto-saved)
+│   ├── 2026-03-17-jwt-refresh-pattern.md
+│   └── archive/           # archived conversations
 ├── archive/
 │   └── 2025/              # previous years' daily files
-├── nichinichi.db              # SQLite index (gitignored, always reconstructable)
-└── .nichinichi.yml            # project-level org override
+├── nichinichi.db          # SQLite index (gitignored, always reconstructable)
+└── .nichinichi.yml        # project-level org override
 ```
 
 ### Entry format
@@ -159,13 +190,14 @@ If no type tag is given, the type is inferred from keywords in the body.
 ## Codebase structure
 
 ```
-nichinichi-mark-02/
+nichinichi/
 ├── Cargo.toml                   # Cargo workspace root (resolver = "2")
 ├── crates/
-│   ├── types/                   # Shared structs: ParsedEntry, Goal, Config…
+│   ├── types/                   # Shared structs: ParsedEntry, Goal, Config, ChatMessage…
 │   ├── parser/                  # Markdown parsers — entries, goals, playbooks, digests
 │   ├── sync/                    # SQLite writer, file watcher, SyncTarget trait
-│   └── ai/                      # FTS5 query builder, Claude SSE client, conversation save
+│   └── ai/                      # FTS5 query builder, OpenAI-compatible SSE client,
+│                                #   conversation save/load/list
 ├── apps/
 │   ├── cli/                     # `nichinichi` binary
 │   └── desktop/
@@ -174,6 +206,7 @@ nichinichi-mark-02/
 └── docs/
     ├── development.md
     ├── file-formats.md
+    ├── ai-chat.md
     └── testing.md
 ```
 
@@ -194,7 +227,7 @@ types  ←  parser  ←  sync  ←  ai
 # Check everything compiles
 cargo check
 
-# Run all tests (19 tests)
+# Run all tests
 cargo test
 
 # Run parser tests specifically
@@ -216,6 +249,7 @@ See [docs/development.md](docs/development.md) for the full guide and [docs/test
 - **`SyncTarget` trait** provides the seam for a future cloud sync backend without touching CLI or Tauri commands
 - **Goal write-back** — UI changes write to the `.md` file first, SQLite second
 - **No auth in Phase 1** — the app opens directly to the dashboard
+- **OpenAI-compatible AI client** — works with any local or hosted model that implements the `/api/chat/completions` endpoint
 
 ---
 
