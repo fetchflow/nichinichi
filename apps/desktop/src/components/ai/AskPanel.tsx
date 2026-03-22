@@ -28,7 +28,7 @@ function EntryBlock({ text }: { text: string }) {
           disabled={added}
           className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
             ${added
-              ? "bg-green-500 cursor-default"
+              ? "bg-green-500 opacity-50 cursor-not-allowed"
               : "bg-amber-500 hover:bg-amber-600 cursor-pointer"
             }`}
         >
