@@ -1,5 +1,5 @@
 use crate::AiError;
-use devlog_types::{AiConfig, ParsedEntry};
+use nichinichi_types::{AiConfig, ParsedEntry};
 use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -90,7 +90,7 @@ impl AiClient {
 
 fn build_system_prompt(entries: &[ParsedEntry]) -> String {
     let mut prompt = String::from(
-        "You are DevLog, an AI assistant embedded in a developer's personal knowledge base.\n\
+        "You are Nichinichi, an AI assistant embedded in a developer's personal knowledge base.\n\
          You have access to the developer's journal entries below. Answer questions about their \
          work history, decisions, and patterns based solely on this context.\n\n\
          If you cannot find relevant information in the entries, say so clearly.\n\n\

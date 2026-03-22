@@ -1,8 +1,8 @@
 mod commands;
 
 use commands::AppState;
-use devlog_parser::load_config;
-use devlog_sync::{open_db, start_file_watcher, sync_incremental};
+use nichinichi_parser::load_config;
+use nichinichi_sync::{open_db, start_file_watcher, sync_incremental};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -121,7 +121,7 @@ async fn setup_app(app: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
 
 fn build_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let sync_item = MenuItem::with_id(app, "sync", "Sync Now", true, None::<&str>)?;
-    let quit_item = MenuItem::with_id(app, "quit", "Quit DevLog", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit Nichinichi", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&sync_item, &quit_item])?;
 
     let app_for_tray = app.clone();

@@ -7,7 +7,7 @@ org: acme
 
 **you:** what decisions did I make about auth this month
 
-**devlog:** Here are the auth-related decisions I found in your March entries, in order:
+**nichinichi:** Here are the auth-related decisions I found in your March entries, in order:
 
 **March 11** — You decided to model permissions as resource:action pairs rather than
 role bitmasks. Your rationale: bitmasks are fast but opaque, hard to audit and explain
@@ -27,7 +27,7 @@ httpOnly cookies for tokens, Redis for sessions. That's a defensible, documented
 
 **you:** which of those would be most useful to capture in a design doc
 
-**devlog:** The resource:action permission model decision from March 11 is the most
+**nichinichi:** The resource:action permission model decision from March 11 is the most
 document-worthy. It's the most consequential of the three — it defines the entire
 access control model, not just an implementation detail.
 

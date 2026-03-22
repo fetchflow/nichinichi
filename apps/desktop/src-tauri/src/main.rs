@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    devlog_desktop_lib::run();
+    nichinichi_desktop_lib::run();
 }

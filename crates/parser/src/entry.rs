@@ -1,5 +1,5 @@
 use crate::ParseError;
-use devlog_types::{EntryType, ParsedEntry};
+use nichinichi_types::{EntryType, ParsedEntry};
 use sha2::{Digest, Sha256};
 
 /// Parse a daily entry file (`YYYY-MM-DD.md`).

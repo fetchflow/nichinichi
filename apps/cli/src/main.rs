@@ -2,11 +2,11 @@ mod commands;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use devlog_parser::load_config;
+use nichinichi_parser::load_config;
 
 #[derive(Parser)]
 #[command(
-    name = "devlog",
+    name = "nichinichi",
     about = "Local-first developer journal and knowledge base",
     version
 )]
@@ -14,7 +14,7 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
 
-    /// Log an entry directly (shorthand for `devlog log "text"`)
+    /// Log an entry directly (shorthand for `nichinichi log "text"`)
     #[arg(value_name = "ENTRY")]
     entry: Option<String>,
 }
@@ -39,7 +39,7 @@ enum Command {
         /// Filter to a specific org
         #[arg(long)]
         org: Option<String>,
-        /// Save the conversation to ~/devlog/ai/
+        /// Save the conversation to ~/nichinichi/ai/
         #[arg(long)]
         save: bool,
     },
@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let config = load_config(Some(&std::env::current_dir()?))?;
 
-    // Shorthand: `devlog "text"` → log
+    // Shorthand: `nichinichi "text"` → log
     if let Some(entry_text) = cli.entry {
         return commands::log::run(&config, &entry_text).await;
     }

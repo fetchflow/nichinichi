@@ -51,7 +51,7 @@ export default function App() {
       {/* Sidebar nav */}
       <aside className="w-48 flex-shrink-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
         <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-800">
-          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">DevLog</span>
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">Nichinichi</span>
         </div>
 
         {/* Org switcher */}

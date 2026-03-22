@@ -7,7 +7,7 @@ with code in this repository.
 
 ## Project Overview
 
-**DevLog** is a local-first developer personal knowledge base and journal
+**Nichinichi** is a local-first developer personal knowledge base and journal
 with an AI layer. Developers log daily activities via CLI or desktop app.
 All data lives as markdown files on the local filesystem. SQLite is a
 reconstructable query index — never the source of truth. There is no
@@ -22,7 +22,7 @@ login screen and no network dependency for core features.
 - All data local: markdown files + SQLite
 - FTS via SQLite FTS5
 - AI via user-supplied API key (entered in Settings UI, saved to
-  `~/.devlog.yml`)
+  `~/.nichinichi.yml`)
 - Git is the backup and multi-machine sync mechanism
 - The app opens directly to the dashboard — no login gate
 
@@ -42,7 +42,7 @@ login screen and no network dependency for core features.
 - All backend logic (parser, sync, AI, CLI) is **Rust**
 - Desktop UI is **Tauri v2** (Rust backend + React/TypeScript/Tailwind
   frontend)
-- The `devlog` CLI binary and Tauri desktop app share the same Rust
+- The `nichinichi` CLI binary and Tauri desktop app share the same Rust
   crates
 - No separate web server, no Python packages, no Node.js backend
 
@@ -51,7 +51,7 @@ login screen and no network dependency for core features.
 ## Repository Structure
 
 ```
-devlog/
+nichinichi/
 ├── Cargo.toml                   # Cargo workspace root (resolver = "2")
 ├── crates/
 │   ├── types/                   # Shared structs: ParsedEntry, Goal,
@@ -62,7 +62,7 @@ devlog/
 │   │                            #   SyncTarget trait (Local impl only)
 │   └── ai/                      # FTS5 query builder + Claude SSE stream
 ├── apps/
-│   ├── cli/                     # `devlog` binary — clap
+│   ├── cli/                     # `nichinichi` binary — clap
 │   └── desktop/                 # Tauri v2 desktop app
 │       ├── src-tauri/
 │       │   ├── Cargo.toml
@@ -83,7 +83,7 @@ devlog/
 │   ├── development.md
 │   ├── file-formats.md          # Canonical format for all markdown files
 │   └── testing.md
-├── .gitignore                   # includes devlog.db
+├── .gitignore                   # includes nichinichi.db
 └── package.json                 # pnpm workspace root
 ```
 
@@ -106,10 +106,10 @@ types  ←  parser  ←  sync  ←  ai
 # Rust (Cargo workspace root)
 cargo build
 cargo test
-cargo test -p devlog-parser          # parser unit tests
-cargo test -p devlog-sync            # sync + SQLite tests
-cargo run -p devlog-cli -- "text"    # run CLI in dev mode
-cargo install --path apps/cli        # install `devlog` globally
+cargo test -p nichinichi-parser          # parser unit tests
+cargo test -p nichinichi-sync            # sync + SQLite tests
+cargo run -p nichinichi-cli -- "text"    # run CLI in dev mode
+cargo install --path apps/cli        # install `nichinichi` globally
 
 # Desktop (apps/desktop/)
 cd apps/desktop && pnpm install
@@ -122,7 +122,7 @@ pnpm tauri build                     # production .app / .exe
 ## Filesystem Layout (user data)
 
 ```
-~/devlog/
+~/nichinichi/
 │
 ├── YYYY-MM-DD.md              # daily entries (current year, root level)
 ├── .quiet/
@@ -152,13 +152,13 @@ pnpm tauri build                     # production .app / .exe
 │       ├── 2025-01-03.md
 │       └── ...
 │
-├── devlog.db                  # SQLite index — GITIGNORED, fully reconstructable
-└── .devlog.yml                # user config (AI key, editor, default org…)
+├── nichinichi.db                  # SQLite index — GITIGNORED, fully reconstructable
+└── .nichinichi.yml                # user config (AI key, editor, default org…)
 ```
 
-**`devlog.db` is gitignored.** It is always reconstructable by running
-`devlog sync --rebuild`. The markdown files are the only data that needs
-to be backed up. Users commit and push `~/devlog/` (excluding `devlog.db`)
+**`nichinichi.db` is gitignored.** It is always reconstructable by running
+`nichinichi sync --rebuild`. The markdown files are the only data that needs
+to be backed up. Users commit and push `~/nichinichi/` (excluding `nichinichi.db`)
 to their own private git remote.
 
 ---
@@ -206,7 +206,7 @@ created: 2026-01-05
 - [x] mentor a junior through a full feature end to end
       notes: David's auth PR — Mar 2026
 - [ ] lead a cross-team technical initiative
-      notes: devlog platform counts — spans 3 projects
+      notes: nichinichi platform counts — spans 3 projects
 - [ ] write and publish a technical design doc
       due: 2026-06-01
 
@@ -251,7 +251,7 @@ org: acme
 
 **you:** when did i fix a jwt bug
 
-**devlog:** Based on your entries: jwt refresh bug fixed March 17...
+**nichinichi:** Based on your entries: jwt refresh bug fixed March 17...
 ```
 
 ### Playbook file (`playbooks/slug.md`)
@@ -273,10 +273,10 @@ created: 2026-02-10
 ...
 ```
 
-### Config file (`~/.devlog.yml`)
+### Config file (`~/.nichinichi.yml`)
 
 ```yaml
-repo: ~/devlog
+repo: ~/nichinichi
 editor: vim           # $EDITOR fallback
 
 ai:
@@ -284,10 +284,10 @@ ai:
   api_key: sk-ant-...          # entered via Settings UI, saved here
   model: claude-sonnet-4-5
 
-# default org for entries with no @org tag and no project .devlog.yml
+# default org for entries with no @org tag and no project .nichinichi.yml
 default_org: personal
 
-# project-level .devlog.yml (in any project root)
+# project-level .nichinichi.yml (in any project root)
 # project: api-refactor
 # org: acme
 ```
@@ -302,7 +302,7 @@ default_org: personal
 - Entry delimiter: `---` on its own line (opens and closes each entry)
 - Entry first line: `HH:MM | body text @org #type #extra-tags`
 - Approximate timestamp: `~HH:MM` — stored with `approximate: true`
-- `@word` → `org` field (first `@mention` wins; overrides `.devlog.yml`
+- `@word` → `org` field (first `@mention` wins; overrides `.nichinichi.yml`
   default)
 - `#word` → type tag if it matches a known type, otherwise pushed to
   `tags[]`
@@ -341,16 +341,16 @@ else                                                    → log
 ### Org resolution order (for any file)
 
 1. Inline `@org` tag in the entry line
-2. `org:` in the nearest `.devlog.yml` walking up from `process.cwd()`
-3. `default_org` in `~/.devlog.yml`
+2. `org:` in the nearest `.nichinichi.yml` walking up from `process.cwd()`
+3. `default_org` in `~/.nichinichi.yml`
 4. `null` (unscoped / personal)
 
 ---
 
-## SQLite Schema (`~/devlog/devlog.db`)
+## SQLite Schema (`~/nichinichi/nichinichi.db`)
 
 This database is **always reconstructable** from the markdown files via
-`devlog sync --rebuild`. Never treat it as a source of truth.
+`nichinichi sync --rebuild`. Never treat it as a source of truth.
 It is gitignored.
 
 ```sql
@@ -365,7 +365,7 @@ CREATE TABLE entries (
                 ('log','solution','decision','reflection','score','ai')),
   tags        TEXT DEFAULT '[]',  -- JSON array
   project     TEXT,
-  org         TEXT,               -- from @mention or .devlog.yml
+  org         TEXT,               -- from @mention or .nichinichi.yml
   approximate INTEGER DEFAULT 0,
   raw_line    TEXT,
   source      TEXT DEFAULT 'sync',
@@ -506,9 +506,9 @@ CREATE INDEX digests_type  ON digests(type);
 ### Data flow (CLI)
 
 ```
-devlog "text @acme #solution"
-  → resolves org from @mention or nearest .devlog.yml
-  → appends entry to ~/devlog/YYYY-MM-DD.md
+nichinichi "text @acme #solution"
+  → resolves org from @mention or nearest .nichinichi.yml
+  → appends entry to ~/nichinichi/YYYY-MM-DD.md
   → triggers sync: parser reads file → upserts to SQLite
 ```
 
@@ -526,10 +526,10 @@ Frontend invoke()
 ### Sync / rebuild flow
 
 ```
-devlog sync --rebuild
+nichinichi sync --rebuild
   → drops all reconstructable tables (entries, goals, playbooks,
     digests, goal_steps, goal_progress, goal_step_entries)
-  → walks ~/devlog/ recursively (excluding .quiet/, devlog.db)
+  → walks ~/nichinichi/ recursively (excluding .quiet/, nichinichi.db)
   → parses every .md file by type (daily | goal | playbook | digest | ai)
   → upserts all parsed records into SQLite
   → rebuilds FTS5 index
@@ -542,7 +542,7 @@ Spawned as a tokio background task in `lib.rs::start_file_watcher`.
 Uses a dedicated `std::thread` for the blocking `notify` event loop,
 forwarding triggers via `tokio::sync::mpsc` channel (capacity 1,
 `try_send` deduplicates rapid saves). Excludes `.quiet/` and
-`devlog.db`. On change: re-parses the affected file and upserts to
+`nichinichi.db`. On change: re-parses the affected file and upserts to
 SQLite. Does not require a full rebuild for single-file changes.
 
 ### AI streaming
@@ -557,7 +557,7 @@ SQLite. Does not require a full rebuild for single-file changes.
 ### Save AI conversation (opt-in)
 
 When the user saves an AI conversation (CLI flag or desktop button):
-- Rust writes a new file to `~/devlog/ai/YYYY-MM-DD-slug.md`
+- Rust writes a new file to `~/nichinichi/ai/YYYY-MM-DD-slug.md`
 - File watcher picks it up and indexes it into SQLite
 - Slug auto-generated from the query text (lowercase, hyphenated,
   truncated to 60 chars) unless user provides one
@@ -632,8 +632,8 @@ files and surfaces them as filter options in the UI.
   pill
 
 **CLI behaviour:**
-- `devlog ask "query" --org acme` overrides active org for that query
-- Org inferred from working directory `.devlog.yml` when not specified
+- `nichinichi ask "query" --org acme` overrides active org for that query
+- Org inferred from working directory `.nichinichi.yml` when not specified
 
 ---
 
@@ -660,12 +660,12 @@ When a goal suggestion is accepted:
 
 ## Archive (daily files)
 
-Daily entry files accumulate in the `~/devlog/` root during their
+Daily entry files accumulate in the `~/nichinichi/` root during their
 active year. Year rollover is triggered by:
-- `devlog archive --year 2025` (explicit)
+- `nichinichi archive --year 2025` (explicit)
 - Automatically on first launch of a new year (with confirmation prompt)
 
-Archive moves files: `~/devlog/2025-*.md` → `~/devlog/archive/2025/`
+Archive moves files: `~/nichinichi/2025-*.md` → `~/nichinichi/archive/2025/`
 
 The file watcher and parser recurse into `archive/` — archived entries
 remain fully searchable. Archiving is organisational only; nothing is
@@ -717,10 +717,10 @@ Migrations live in `crates/sync/migrations/`.
 
 ---
 
-## Config (`~/.devlog.yml`)
+## Config (`~/.nichinichi.yml`)
 
 ```yaml
-repo: ~/devlog
+repo: ~/nichinichi
 editor: vim          # $EDITOR fallback
 
 ai:
@@ -729,7 +729,7 @@ ai:
   model: claude-sonnet-4-5
 
 default_org: personal                  # fallback when no @org and no
-                                       # project .devlog.yml
+                                       # project .nichinichi.yml
 ```
 
 AI key is entered once in the Settings UI and written to this file.
@@ -747,7 +747,7 @@ AI_API_KEY=sk-ant-...
 AI_MODEL=claude-sonnet-4-5
 ```
 
-These are only needed for CLI use without a `~/.devlog.yml`. The
+These are only needed for CLI use without a `~/.nichinichi.yml`. The
 desktop app always reads from the config file.
 
 ---
@@ -759,7 +759,7 @@ desktop app always reads from the config file.
 - `sqlx` (not `rusqlite`) for async-native SQLite access
 - SQLite is a reconstructable query index — markdown files are the
   source of truth for all entries, goals, playbooks, and digests
-- `devlog.db` is gitignored — reconstruction via `devlog sync --rebuild`
+- `nichinichi.db` is gitignored — reconstruction via `nichinichi sync --rebuild`
   is the recovery path on any new machine
 - `goal_suggestions` and `settings` are the only SQLite-only data —
   they are not written to markdown and are cleared on rebuild

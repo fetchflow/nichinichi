@@ -5,7 +5,7 @@ use crate::{
     playbook::parse_playbook_file,
     ParseError,
 };
-use devlog_types::{AiConversation, Config, Digest, Goal, ParsedEntry, Playbook};
+use nichinichi_types::{AiConversation, Config, Digest, Goal, ParsedEntry, Playbook};
 use std::path::Path;
 
 /// All possible parsed outputs from a single file.

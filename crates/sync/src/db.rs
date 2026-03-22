@@ -3,9 +3,9 @@ use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::path::Path;
 use std::str::FromStr;
 
-/// Open (or create) the SQLite database at `repo/devlog.db` and run migrations.
+/// Open (or create) the SQLite database at `repo/nichinichi.db` and run migrations.
 pub async fn open_db(repo: &Path) -> Result<SqlitePool, SyncError> {
-    let db_path = repo.join("devlog.db");
+    let db_path = repo.join("nichinichi.db");
     let url = format!("sqlite://{}?mode=rwc", db_path.display());
 
     let opts = SqliteConnectOptions::from_str(&url)

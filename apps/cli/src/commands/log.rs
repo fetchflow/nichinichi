@@ -1,9 +1,9 @@
 use anyhow::Result;
 use chrono::Local;
 use colored::Colorize;
-use devlog_parser::entry::parse_entry_file;
-use devlog_sync::{open_db, LocalSqlite, SyncTarget};
-use devlog_types::Config;
+use nichinichi_parser::entry::parse_entry_file;
+use nichinichi_sync::{open_db, LocalSqlite, SyncTarget};
+use nichinichi_types::Config;
 use std::io::Write;
 
 pub async fn run(config: &Config, text: &str) -> Result<()> {

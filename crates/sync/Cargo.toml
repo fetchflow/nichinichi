@@ -1,11 +1,11 @@
 [package]
-name = "devlog-sync"
+name = "nichinichi-sync"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-devlog-types  = { workspace = true }
-devlog-parser = { workspace = true }
+nichinichi-types  = { workspace = true }
+nichinichi-parser = { workspace = true }
 serde         = { workspace = true }
 serde_json    = { workspace = true }
 sqlx          = { workspace = true }

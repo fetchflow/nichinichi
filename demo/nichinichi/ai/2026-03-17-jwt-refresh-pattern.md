@@ -7,7 +7,7 @@ org: acme
 
 **you:** when did i fix a jwt bug
 
-**devlog:** Based on your entries, you fixed a jwt refresh bug today, March 17th 2026.
+**nichinichi:** Based on your entries, you fixed a jwt refresh bug today, March 17th 2026.
 
 The entry reads: "jwt refresh swallowing errors — fixed @acme #solution"
 
@@ -22,7 +22,7 @@ Is there anything specific about the fix or the timeline you want to explore?
 
 **you:** what did i reject from claude that day
 
-**devlog:** Also on March 17th, you logged an AI entry at 13:10: "claude suggested
+**nichinichi:** Also on March 17th, you logged an AI entry at 13:10: "claude suggested
 localStorage for the token store — rejected, xss risk @acme #ai"
 
 You noted that you asked Claude where to store the refresh token in a SPA and it

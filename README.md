@@ -1,4 +1,4 @@
-# DevLog
+# Nichinichi
 
 A local-first developer journal and personal knowledge base with an AI layer.
 
@@ -18,7 +18,7 @@ Log daily work from the CLI or desktop app. All data lives as plain markdown fil
 - **Tags & Workspaces** — create custom tags (with color) and workspaces in Settings; tags appear in the composer chip row alongside built-in types; workspace names appear in both the composer and the org switcher
 - **Org filtering** — scope entries and AI queries to a project or client; the sidebar switcher merges explicit workspaces with orgs discovered from entries
 - **Private entries** — `.quiet/` files are never indexed or sent to AI
-- **Git-native backup** — commit and push `~/devlog/` to your own private remote
+- **Git-native backup** — commit and push `~/nichinichi/` to your own private remote
 
 ---
 
@@ -28,7 +28,7 @@ Log daily work from the CLI or desktop app. All data lives as plain markdown fil
 |---|---|
 | Backend logic | Rust (workspace with shared crates) |
 | Desktop UI | Tauri v2 + React 18 + TypeScript + Tailwind CSS |
-| CLI | `devlog` binary (clap) |
+| CLI | `nichinichi` binary (clap) |
 | Database | SQLite via sqlx (reconstructable index) |
 | AI | Anthropic Claude API (SSE streaming) |
 | Search | SQLite FTS5 |
@@ -50,25 +50,25 @@ Log daily work from the CLI or desktop app. All data lives as plain markdown fil
 cargo install --path apps/cli
 
 # Log an entry
-devlog "fixed the JWT refresh bug @acme #solution"
+nichinichi "fixed the JWT refresh bug @acme #solution"
 
 # Log with type inference (no tag needed)
-devlog "merged the feature branch @acme"   # → inferred: score
+nichinichi "merged the feature branch @acme"   # → inferred: score
 
-# Ask a question (requires API key in ~/.devlog.yml)
-devlog ask "when did I fix something related to auth"
+# Ask a question (requires API key in ~/.nichinichi.yml)
+nichinichi ask "when did I fix something related to auth"
 
 # Goals
-devlog goals list
-devlog goals add "become a staff engineer"
-devlog goals done "become-staff-engineer"
+nichinichi goals list
+nichinichi goals add "become a staff engineer"
+nichinichi goals done "become-staff-engineer"
 
 # Sync / rebuild
-devlog sync
-devlog sync --rebuild
+nichinichi sync
+nichinichi sync --rebuild
 
 # Archive last year's files
-devlog archive --year 2025
+nichinichi archive --year 2025
 ```
 
 ### Desktop app
@@ -84,10 +84,10 @@ pnpm tauri build   # production .app / .exe
 
 ## Configuration
 
-DevLog reads `~/.devlog.yml` on startup. The desktop Settings UI writes to this file automatically. Settings includes a **Browse** button to pick the devlog folder with a native directory picker, and a **Tags & Workspaces** section to manage custom tags (with color) and workspace names.
+Nichinichi reads `~/.nichinichi.yml` on startup. The desktop Settings UI writes to this file automatically. Settings includes a **Browse** button to pick the nichinichi folder with a native directory picker, and a **Tags & Workspaces** section to manage custom tags (with color) and workspace names.
 
 ```yaml
-repo: ~/devlog        # where your markdown files live
+repo: ~/nichinichi        # where your markdown files live
 editor: vim           # $EDITOR fallback for CLI
 
 ai:
@@ -110,7 +110,7 @@ export AI_MODEL=claude-sonnet-4-5
 ## Filesystem layout
 
 ```
-~/devlog/
+~/nichinichi/
 ├── 2026-03-17.md          # daily entry files
 ├── .quiet/                # private entries — never indexed, never AI
 │   └── 2026-03-17.md
@@ -127,8 +127,8 @@ export AI_MODEL=claude-sonnet-4-5
 │   └── 2026-03-17-jwt-refresh-pattern.md
 ├── archive/
 │   └── 2025/              # previous years' daily files
-├── devlog.db              # SQLite index (gitignored, always reconstructable)
-└── .devlog.yml            # project-level org override
+├── nichinichi.db              # SQLite index (gitignored, always reconstructable)
+└── .nichinichi.yml            # project-level org override
 ```
 
 ### Entry format
@@ -159,7 +159,7 @@ If no type tag is given, the type is inferred from keywords in the body.
 ## Codebase structure
 
 ```
-devlog-mark-02/
+nichinichi-mark-02/
 ├── Cargo.toml                   # Cargo workspace root (resolver = "2")
 ├── crates/
 │   ├── types/                   # Shared structs: ParsedEntry, Goal, Config…
@@ -167,7 +167,7 @@ devlog-mark-02/
 │   ├── sync/                    # SQLite writer, file watcher, SyncTarget trait
 │   └── ai/                      # FTS5 query builder, Claude SSE client, conversation save
 ├── apps/
-│   ├── cli/                     # `devlog` binary
+│   ├── cli/                     # `nichinichi` binary
 │   └── desktop/
 │       ├── src-tauri/           # Tauri Rust backend (commands, tray, file watcher)
 │       └── src/                 # React/TypeScript frontend
@@ -198,10 +198,10 @@ cargo check
 cargo test
 
 # Run parser tests specifically
-cargo test -p devlog-parser
+cargo test -p nichinichi-parser
 
 # Run the CLI
-cargo run -p devlog-cli -- "text @org #type"
+cargo run -p nichinichi-cli -- "text @org #type"
 ```
 
 See [docs/development.md](docs/development.md) for the full guide and [docs/testing.md](docs/testing.md) for the test strategy.
@@ -210,8 +210,8 @@ See [docs/development.md](docs/development.md) for the full guide and [docs/test
 
 ## Key design decisions
 
-- **Markdown is the source of truth** — SQLite is always reconstructable via `devlog sync --rebuild`
-- **`devlog.db` is gitignored** — back up your data by committing the markdown files
+- **Markdown is the source of truth** — SQLite is always reconstructable via `nichinichi sync --rebuild`
+- **`nichinichi.db` is gitignored** — back up your data by committing the markdown files
 - **`.quiet/` is enforced in the watcher and rebuild**, not just the UI
 - **`SyncTarget` trait** provides the seam for a future cloud sync backend without touching CLI or Tauri commands
 - **Goal write-back** — UI changes write to the `.md` file first, SQLite second
@@ -221,16 +221,16 @@ See [docs/development.md](docs/development.md) for the full guide and [docs/test
 
 ## Backup and sync
 
-Commit and push `~/devlog/` (excluding `devlog.db`) to a private git remote:
+Commit and push `~/nichinichi/` (excluding `nichinichi.db`) to a private git remote:
 
 ```bash
-cd ~/devlog
+cd ~/nichinichi
 git init
-echo "devlog.db" >> .gitignore
+echo "nichinichi.db" >> .gitignore
 git add .
 git commit -m "initial"
-git remote add origin git@github.com:you/devlog-private.git
+git remote add origin git@github.com:you/nichinichi-private.git
 git push -u origin main
 ```
 
-On a new machine: clone the repo, run `devlog sync --rebuild` to reconstruct the database.
+On a new machine: clone the repo, run `nichinichi sync --rebuild` to reconstruct the database.

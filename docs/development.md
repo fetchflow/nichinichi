@@ -14,13 +14,13 @@
 cargo build
 
 # Run the CLI in dev mode
-cargo run -p devlog-cli -- --help
+cargo run -p nichinichi-cli -- --help
 
 # Run parser tests
-cargo test -p devlog-parser
+cargo test -p nichinichi-parser
 
 # Run sync tests (requires temp SQLite)
-cargo test -p devlog-sync
+cargo test -p nichinichi-sync
 
 # Start the desktop app (hot-reload)
 cd apps/desktop
@@ -31,7 +31,7 @@ pnpm tauri dev
 ## Repository structure
 
 ```
-devlog-mark-02/
+nichinichi-mark-02/
 ├── Cargo.toml                  # Workspace root (resolver = "2")
 ├── crates/
 │   ├── types/                  # Shared domain structs
@@ -39,7 +39,7 @@ devlog-mark-02/
 │   ├── sync/                   # SQLite + file watcher
 │   └── ai/                     # FTS5 search + Claude streaming
 ├── apps/
-│   ├── cli/                    # `devlog` binary
+│   ├── cli/                    # `nichinichi` binary
 │   └── desktop/
 │       ├── src-tauri/          # Tauri Rust backend
 │       └── src/                # React/TypeScript frontend
@@ -63,14 +63,14 @@ AI_BASE_URL=https://api.anthropic.com
 AI_MODEL=claude-sonnet-4-5
 ```
 
-The desktop app reads from `~/.devlog.yml` (set via Settings UI).
+The desktop app reads from `~/.nichinichi.yml` (set via Settings UI).
 
 ## Database
 
-`~/devlog/devlog.db` is a SQLite file that is always reconstructable:
+`~/nichinichi/nichinichi.db` is a SQLite file that is always reconstructable:
 
 ```bash
-devlog sync --rebuild
+nichinichi sync --rebuild
 ```
 
 It is gitignored. Never commit it.

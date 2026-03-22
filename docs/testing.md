@@ -7,13 +7,13 @@
 cargo test
 
 # Parser unit tests (17 tests)
-cargo test -p devlog-parser
+cargo test -p nichinichi-parser
 
 # Sync integration tests
-cargo test -p devlog-sync
+cargo test -p nichinichi-sync
 
 # AI unit tests (slug generation)
-cargo test -p devlog-ai
+cargo test -p nichinichi-ai
 ```
 
 ## Parser tests
@@ -44,19 +44,19 @@ Planned tests:
 
 ```bash
 # 1. Set up a test repo
-mkdir -p /tmp/devlog-test
-export DEVLOG_REPO=/tmp/devlog-test
+mkdir -p /tmp/nichinichi-test
+export NICHINICHI_REPO=/tmp/nichinichi-test
 
 # 2. Log an entry
-cargo run -p devlog-cli -- "fixed the auth bug @acme #solution"
+cargo run -p nichinichi-cli -- "fixed the auth bug @acme #solution"
 
 # 3. Sync and verify
-cargo run -p devlog-cli -- sync
-sqlite3 /tmp/devlog-test/devlog.db "SELECT body, type FROM entries;"
+cargo run -p nichinichi-cli -- sync
+sqlite3 /tmp/nichinichi-test/nichinichi.db "SELECT body, type FROM entries;"
 
 # 4. Ask a question (requires AI_API_KEY)
-cargo run -p devlog-cli -- ask "when did I fix something"
+cargo run -p nichinichi-cli -- ask "when did I fix something"
 
 # 5. Verify file was written
-cat /tmp/devlog-test/$(date +%Y-%m-%d).md
+cat /tmp/nichinichi-test/$(date +%Y-%m-%d).md
 ```

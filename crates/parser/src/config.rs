@@ -1,12 +1,12 @@
 use crate::ParseError;
-use devlog_types::{AiConfig, Config};
+use nichinichi_types::{AiConfig, Config};
 use std::path::{Path, PathBuf};
 
-/// Load config from `~/.devlog.yml`, applying env var fallbacks for AI settings.
-/// Also walks up from `start_dir` looking for a project-level `.devlog.yml`.
+/// Load config from `~/.nichinichi.yml`, applying env var fallbacks for AI settings.
+/// Also walks up from `start_dir` looking for a project-level `.nichinichi.yml`.
 pub fn load_config(start_dir: Option<&Path>) -> Result<Config, ParseError> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    let global_path = home.join(".devlog.yml");
+    let global_path = home.join(".nichinichi.yml");
 
     let mut config = if global_path.exists() {
         let content = std::fs::read_to_string(&global_path)?;
@@ -14,7 +14,7 @@ pub fn load_config(start_dir: Option<&Path>) -> Result<Config, ParseError> {
         config_from_yaml(&raw, &home)
     } else {
         Config {
-            repo: home.join("devlog"),
+            repo: home.join("nichinichi"),
             editor: std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string()),
             ai: AiConfig::default(),
             default_org: None,
@@ -39,7 +39,7 @@ pub fn load_config(start_dir: Option<&Path>) -> Result<Config, ParseError> {
         }
     }
 
-    // Walk up from start_dir to find project-level .devlog.yml
+    // Walk up from start_dir to find project-level .nichinichi.yml
     if let Some(dir) = start_dir {
         if let Some(proj_org) = find_project_org(dir) {
             config.project_org = Some(proj_org);
@@ -54,7 +54,7 @@ fn config_from_yaml(raw: &serde_yaml::Value, home: &Path) -> Config {
         .get("repo")
         .and_then(|v| v.as_str())
         .map(|s| expand_tilde(s, home))
-        .unwrap_or_else(|| home.join("devlog"));
+        .unwrap_or_else(|| home.join("nichinichi"));
 
     let editor = raw
         .get("editor")
@@ -111,7 +111,7 @@ fn expand_tilde(path: &str, home: &Path) -> PathBuf {
 fn find_project_org(start: &Path) -> Option<String> {
     let mut dir = start;
     loop {
-        let candidate = dir.join(".devlog.yml");
+        let candidate = dir.join(".nichinichi.yml");
         if candidate.exists() {
             if let Ok(content) = std::fs::read_to_string(&candidate) {
                 if let Ok(raw) = serde_yaml::from_str::<serde_yaml::Value>(&content) {

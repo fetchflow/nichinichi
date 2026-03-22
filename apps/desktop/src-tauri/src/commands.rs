@@ -1,6 +1,6 @@
-use devlog_ai::{save_conversation, search_entries, AiClient};
-use devlog_sync::{rebuild_from_disk, sync_incremental, LocalSqlite, SyncTarget};
-use devlog_types::{Config, Goal, OrgScope, ParsedEntry, Playbook};
+use nichinichi_ai::{save_conversation, search_entries, AiClient};
+use nichinichi_sync::{rebuild_from_disk, sync_incremental, LocalSqlite, SyncTarget};
+use nichinichi_types::{Config, Goal, OrgScope, ParsedEntry, Playbook};
 use serde::Serialize;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
@@ -101,7 +101,7 @@ pub async fn add_entry(
 
     let content = std::fs::read_to_string(&daily_file).map_err(|e| e.to_string())?;
     let default_org = config.effective_org();
-    let entries = devlog_parser::entry::parse_entry_file(&content, &date, default_org)
+    let entries = nichinichi_parser::entry::parse_entry_file(&content, &date, default_org)
         .map_err(|e| e.to_string())?;
 
     let target = LocalSqlite::new(state.pool.clone());
@@ -149,7 +149,7 @@ pub async fn get_goals(
             }
             let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
             let path_str = path.to_string_lossy().to_string();
-            let goal = devlog_parser::goal::parse_goal_file(&content, &path_str)
+            let goal = nichinichi_parser::goal::parse_goal_file(&content, &path_str)
                 .map_err(|e| format!("parse error in {path_str}: {e}"))?;
             let status_match = status.as_ref().map_or(true, |s| goal.status.to_string() == *s);
             let org_match = match (org.as_deref(), goal.org.as_deref()) {
@@ -193,7 +193,7 @@ pub async fn update_goal_step(
     std::fs::write(&file_path, &updated).map_err(|e| e.to_string())?;
 
     let path_str = file_path.to_string_lossy().to_string();
-    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str)
+    let goal = nichinichi_parser::goal::parse_goal_file(&updated, &path_str)
         .map_err(|e| e.to_string())?;
     let target = LocalSqlite::new(state.pool.clone());
     target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
@@ -278,7 +278,7 @@ pub async fn archive_goal(
     }
 
     let path_str = archive_path.to_string_lossy().to_string();
-    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str).map_err(|e| e.to_string())?;
+    let goal = nichinichi_parser::goal::parse_goal_file(&updated, &path_str).map_err(|e| e.to_string())?;
     let target = LocalSqlite::new(state.pool.clone());
     target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
 
@@ -314,7 +314,7 @@ pub async fn reactivate_goal(
     std::fs::remove_file(&archive_path).map_err(|e| e.to_string())?;
 
     let path_str = active_path.to_string_lossy().to_string();
-    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str).map_err(|e| e.to_string())?;
+    let goal = nichinichi_parser::goal::parse_goal_file(&updated, &path_str).map_err(|e| e.to_string())?;
     let target = LocalSqlite::new(state.pool.clone());
     target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
 
@@ -371,7 +371,7 @@ pub async fn get_playbooks(
         }
         let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
         let path_str = path.to_string_lossy().to_string();
-        if let Ok(pb) = devlog_parser::playbook::parse_playbook_file(&content, &path_str) {
+        if let Ok(pb) = nichinichi_parser::playbook::parse_playbook_file(&content, &path_str) {
             let org_match = match (org.as_deref(), pb.org.as_deref()) {
                 (None, _) => true,
                 (Some("personal"), None) => true,
@@ -393,7 +393,7 @@ pub async fn get_playbooks(
 pub async fn get_digests(
     org: Option<String>,
     state: State<'_, Mutex<AppState>>,
-) -> Result<Vec<devlog_types::Digest>, String> {
+) -> Result<Vec<nichinichi_types::Digest>, String> {
     let state = state.lock().await;
     let dir = state.config.repo.join("digests");
     if !dir.exists() {
@@ -409,7 +409,7 @@ pub async fn get_digests(
         }
         let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
         let path_str = path.to_string_lossy().to_string();
-        if let Ok(digest) = devlog_parser::digest::parse_digest_file(&content, &path_str) {
+        if let Ok(digest) = nichinichi_parser::digest::parse_digest_file(&content, &path_str) {
             let org_match = match (org.as_deref(), digest.org.as_deref()) {
                 (None, _) => true,
                 (Some("personal"), None) => true,
@@ -853,14 +853,14 @@ pub async fn save_ai_key(
     // Update in-memory config
     state.config.ai.api_key = api_key.clone();
 
-    // Write to ~/.devlog.yml
+    // Write to ~/.nichinichi.yml
     let home = dirs::home_dir().ok_or("cannot find home directory")?;
-    let config_path = home.join(".devlog.yml");
+    let config_path = home.join(".nichinichi.yml");
     let content = if config_path.exists() {
         std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?
     } else {
         format!(
-            "repo: ~/devlog\nai:\n  base_url: https://api.anthropic.com\n  api_key: \"\"\n  model: claude-sonnet-4-5\n"
+            "repo: ~/nichinichi\nai:\n  base_url: https://api.anthropic.com\n  api_key: \"\"\n  model: claude-sonnet-4-5\n"
         )
     };
 
@@ -901,12 +901,12 @@ pub async fn save_config_repo(
     let mut state = state.lock().await;
 
     let home = dirs::home_dir().ok_or("cannot find home directory")?;
-    let config_path = home.join(".devlog.yml");
+    let config_path = home.join(".nichinichi.yml");
     let content = if config_path.exists() {
         std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?
     } else {
         format!(
-            "repo: ~/devlog\nai:\n  base_url: https://api.anthropic.com\n  api_key: \"\"\n  model: claude-sonnet-4-5\n"
+            "repo: ~/nichinichi\nai:\n  base_url: https://api.anthropic.com\n  api_key: \"\"\n  model: claude-sonnet-4-5\n"
         )
     };
 
@@ -962,7 +962,7 @@ pub async fn update_goal_meta(
     // Re-sync from the updated file
     let target = LocalSqlite::new(state.pool.clone());
     let path_str = file_path.to_string_lossy().to_string();
-    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str)
+    let goal = nichinichi_parser::goal::parse_goal_file(&updated, &path_str)
         .map_err(|e| e.to_string())?;
     target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
     let _ = app.emit("sync-update", ());
@@ -970,7 +970,7 @@ pub async fn update_goal_meta(
     Ok(goal)
 }
 
-fn find_goal_file(config: &devlog_types::Config, goal_id: &str) -> Option<std::path::PathBuf> {
+fn find_goal_file(config: &nichinichi_types::Config, goal_id: &str) -> Option<std::path::PathBuf> {
     for subdir in &["active", "archive"] {
         let p = config.repo.join("goals").join(subdir).join(format!("{goal_id}.md"));
         if p.exists() {
@@ -1072,7 +1072,7 @@ pub async fn save_goal_content(
     std::fs::write(&file_path, &updated).map_err(|e| e.to_string())?;
 
     let path_str = file_path.to_string_lossy().to_string();
-    let goal = devlog_parser::goal::parse_goal_file(&updated, &path_str)
+    let goal = nichinichi_parser::goal::parse_goal_file(&updated, &path_str)
         .map_err(|e| e.to_string())?;
     let target = LocalSqlite::new(state.pool.clone());
     target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
@@ -1210,7 +1210,7 @@ pub async fn save_playbook(
     // Read existing file to preserve org/forked_from/created metadata
     let existing = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
     let path_str = file_path.to_string_lossy().to_string();
-    let old_pb = devlog_parser::playbook::parse_playbook_file(&existing, &path_str)
+    let old_pb = nichinichi_parser::playbook::parse_playbook_file(&existing, &path_str)
         .map_err(|e| e.to_string())?;
 
     let tags_str = tags.join(", ");
@@ -1225,7 +1225,7 @@ pub async fn save_playbook(
     std::fs::write(&file_path, &new_file).map_err(|e| e.to_string())?;
 
     let target = LocalSqlite::new(state.pool.clone());
-    let pb = devlog_parser::playbook::parse_playbook_file(&new_file, &path_str)
+    let pb = nichinichi_parser::playbook::parse_playbook_file(&new_file, &path_str)
         .map_err(|e| e.to_string())?;
     target.upsert_playbook(&pb).await.map_err(|e| e.to_string())?;
     let _ = app.emit("sync-update", ());
@@ -1273,7 +1273,7 @@ pub async fn create_playbook(
     std::fs::write(&file_path, &content).map_err(|e| e.to_string())?;
 
     let path_str = file_path.to_string_lossy().to_string();
-    let pb = devlog_parser::playbook::parse_playbook_file(&content, &path_str)
+    let pb = nichinichi_parser::playbook::parse_playbook_file(&content, &path_str)
         .map_err(|e| e.to_string())?;
     let target = LocalSqlite::new(state.pool.clone());
     target.upsert_playbook(&pb).await.map_err(|e| e.to_string())?;
@@ -1339,7 +1339,7 @@ struct EntryRow {
 }
 
 fn row_to_entry(row: EntryRow) -> ParsedEntry {
-    use devlog_types::EntryType;
+    use nichinichi_types::EntryType;
     let entry_type = row.entry_type.parse::<EntryType>().unwrap_or(EntryType::Log);
     let tags: Vec<String> = serde_json::from_str(&row.tags).unwrap_or_default();
     ParsedEntry {

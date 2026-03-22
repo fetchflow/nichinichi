@@ -26,7 +26,7 @@ pub struct Config {
     #[serde(default)]
     pub ai: AiConfig,
     pub default_org: Option<String>,
-    /// project-level override (from nearest .devlog.yml in cwd ancestry)
+    /// project-level override (from nearest .nichinichi.yml in cwd ancestry)
     #[serde(skip)]
     pub project_org: Option<String>,
 }

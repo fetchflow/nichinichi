@@ -1,5 +1,5 @@
 use crate::AiError;
-use devlog_types::{EntryType, OrgScope, ParsedEntry};
+use nichinichi_types::{EntryType, OrgScope, ParsedEntry};
 use sqlx::SqlitePool;
 
 /// Search entries using SQLite FTS5 and return results ranked by relevance.

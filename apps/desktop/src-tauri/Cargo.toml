@@ -1,17 +1,17 @@
 [package]
-name = "devlog-desktop"
+name = "nichinichi-desktop"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "devlog_desktop_lib"
+name = "nichinichi_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
-devlog-types  = { workspace = true }
-devlog-parser = { workspace = true }
-devlog-sync   = { workspace = true }
-devlog-ai     = { workspace = true }
+nichinichi-types  = { workspace = true }
+nichinichi-parser = { workspace = true }
+nichinichi-sync   = { workspace = true }
+nichinichi-ai     = { workspace = true }
 tauri         = { workspace = true }
 tauri-plugin-autostart = { workspace = true }
 tauri-plugin-dialog    = { workspace = true }

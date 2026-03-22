@@ -1,7 +1,7 @@
 {
-  "productName": "DevLog",
+  "productName": "Nichinichi",
   "version": "0.1.0",
-  "identifier": "com.fetchflow.devlog",
+  "identifier": "com.fetchflow.nichinichi",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -17,7 +17,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "DevLog",
+        "title": "Nichinichi",
         "width": 1280,
         "height": 800,
         "minWidth": 900,

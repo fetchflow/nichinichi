@@ -1,5 +1,5 @@
 use crate::ParseError;
-use devlog_types::Playbook;
+use nichinichi_types::Playbook;
 use std::path::Path;
 
 /// Parse a playbook markdown file.

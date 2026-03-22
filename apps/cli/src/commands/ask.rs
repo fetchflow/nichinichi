@@ -1,8 +1,8 @@
 use anyhow::Result;
 use colored::Colorize;
-use devlog_ai::{save_conversation, search_entries, AiClient};
-use devlog_sync::open_db;
-use devlog_types::{Config, OrgScope};
+use nichinichi_ai::{save_conversation, search_entries, AiClient};
+use nichinichi_sync::open_db;
+use nichinichi_types::{Config, OrgScope};
 use std::io::{self, Write};
 
 pub async fn run(
@@ -26,7 +26,7 @@ pub async fn run(
         println!("{}", "No matching entries found in your journal.".yellow());
     }
 
-    println!("{}", "devlog:".cyan().bold());
+    println!("{}", "nichinichi:".cyan().bold());
 
     let client = AiClient::new(config.ai.clone());
     let response = client

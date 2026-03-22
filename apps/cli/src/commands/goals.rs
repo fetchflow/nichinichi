@@ -1,9 +1,9 @@
 use anyhow::Result;
 use chrono::Local;
 use colored::Colorize;
-use devlog_parser::goal::parse_goal_file;
-use devlog_sync::{open_db, LocalSqlite, SyncTarget};
-use devlog_types::{Config, GoalStatus};
+use nichinichi_parser::goal::parse_goal_file;
+use nichinichi_sync::{open_db, LocalSqlite, SyncTarget};
+use nichinichi_types::{Config, GoalStatus};
 use std::io::Write;
 
 pub async fn list(config: &Config) -> Result<()> {
@@ -24,7 +24,7 @@ pub async fn list(config: &Config) -> Result<()> {
         let path_str = path.to_string_lossy().to_string();
         if let Ok(goal) = parse_goal_file(&content, &path_str) {
             found = true;
-            let done = goal.steps.iter().filter(|s| matches!(s.status, devlog_types::GoalStepStatus::Done)).count();
+            let done = goal.steps.iter().filter(|s| matches!(s.status, nichinichi_types::GoalStepStatus::Done)).count();
             let total = goal.steps.len();
             println!(
                 "{} {} {}/{} steps",
@@ -34,7 +34,7 @@ pub async fn list(config: &Config) -> Result<()> {
                 total
             );
             for step in &goal.steps {
-                let check = if matches!(step.status, devlog_types::GoalStepStatus::Done) {
+                let check = if matches!(step.status, nichinichi_types::GoalStepStatus::Done) {
                     "[x]".green()
                 } else {
                     "[ ]".normal()
