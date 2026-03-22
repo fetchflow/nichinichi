@@ -2,7 +2,7 @@ use anyhow::Result;
 use colored::Colorize;
 use nichinichi_ai::{save_conversation, search_entries, AiClient};
 use nichinichi_sync::open_db;
-use nichinichi_types::{Config, OrgScope};
+use nichinichi_types::{ChatMessage, Config, OrgScope};
 use std::io::{self, Write};
 
 pub async fn run(
@@ -39,7 +39,11 @@ pub async fn run(
     println!(); // newline after streaming
 
     if save {
-        let path = save_conversation(&config.repo, query, &response, org, None).await?;
+        let messages = vec![
+            ChatMessage { role: "user".to_string(), content: query.to_string() },
+            ChatMessage { role: "assistant".to_string(), content: response },
+        ];
+        let path = save_conversation(&config.repo, &messages, org, None).await?;
         println!(
             "\n{} {}",
             "saved:".green().bold(),

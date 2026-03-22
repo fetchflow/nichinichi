@@ -172,10 +172,12 @@ export default function App() {
             <AskPanel
               messages={ai.messages}
               streaming={ai.streaming}
+              activeOrg={activeOrg}
               onAsk={(q, model) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg, model)}
               onSave={() => ai.save(activeOrg === "all" ? undefined : activeOrg)}
               onClear={ai.clear}
               onClose={() => setAiOpen(false)}
+              onLoad={ai.loadConversation}
             />
           </div>
         )}

@@ -69,14 +69,12 @@ export function useAi() {
   const save = useCallback(
     async (org?: string) => {
       if (!messages.length) return;
-      const query = messages.find((m) => m.role === "user")?.content ?? "";
       await invoke("save_ai_conversation_cmd", {
-        query,
-        response: lastResponse,
+        messages,
         org: org ?? null,
       });
     },
-    [messages, lastResponse]
+    [messages]
   );
 
   const clear = useCallback(() => {
@@ -84,5 +82,10 @@ export function useAi() {
     setLastResponse("");
   }, []);
 
-  return { messages, streaming, ask, save, clear };
+  const loadConversation = useCallback((loaded: AiMessage[]) => {
+    setMessages(loaded);
+    setLastResponse("");
+  }, []);
+
+  return { messages, streaming, ask, save, clear, loadConversation };
 }

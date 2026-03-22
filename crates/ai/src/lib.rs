@@ -3,7 +3,7 @@ pub mod save;
 pub mod stream;
 
 pub use query::search_entries;
-pub use save::save_conversation;
+pub use save::{list_conversations, load_conversation, save_conversation};
 pub use stream::AiClient;
 
 use thiserror::Error;

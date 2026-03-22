@@ -1,4 +1,4 @@
-use nichinichi_ai::{save_conversation, search_entries, AiClient};
+use nichinichi_ai::{list_conversations, load_conversation, save_conversation, search_entries, AiClient};
 use nichinichi_sync::{rebuild_from_disk, sync_incremental, LocalSqlite, SyncTarget};
 use nichinichi_types::{ChatMessage, Config, Goal, OrgScope, ParsedEntry, Playbook};
 use serde::Serialize;
@@ -515,8 +515,7 @@ pub async fn ai_ask(
 
 #[tauri::command]
 pub async fn save_ai_conversation_cmd(
-    query: String,
-    response: String,
+    messages: Vec<ChatMessage>,
     org: Option<String>,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
@@ -524,10 +523,34 @@ pub async fn save_ai_conversation_cmd(
         let state = state.lock().await;
         state.config.repo.clone()
     };
-    save_conversation(&repo, &query, &response, org.as_deref(), None)
+    save_conversation(&repo, &messages, org.as_deref(), None)
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_ai_conversations(
+    org: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<nichinichi_types::AiConversation>, String> {
+    let repo = {
+        let state = state.lock().await;
+        state.config.repo.clone()
+    };
+    list_conversations(&repo, org.as_deref())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn load_ai_conversation_cmd(
+    file_path: String,
+) -> Result<Vec<ChatMessage>, String> {
+    let path = std::path::PathBuf::from(&file_path);
+    load_conversation(&path)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ── Stats ──────────────────────────────────────────────────────────────────

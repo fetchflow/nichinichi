@@ -44,6 +44,8 @@ pub fn run() {
             commands::get_last_sync,
             commands::ai_ask,
             commands::save_ai_conversation_cmd,
+            commands::get_ai_conversations,
+            commands::load_ai_conversation_cmd,
             commands::get_stats,
             commands::get_activity,
             commands::get_settings,
