@@ -31,13 +31,14 @@ pnpm tauri dev
 ## Repository structure
 
 ```
-nichinichi-mark-02/
+nichinichi/
 ├── Cargo.toml                  # Workspace root (resolver = "2")
 ├── crates/
-│   ├── types/                  # Shared domain structs
+│   ├── types/                  # Shared domain structs (ParsedEntry, Goal, ChatMessage…)
 │   ├── parser/                 # Markdown parsers
 │   ├── sync/                   # SQLite + file watcher
-│   └── ai/                     # FTS5 search + Claude streaming
+│   └── ai/                     # FTS5 search + OpenAI-compatible SSE streaming
+│                               #   + conversation save / load / list
 ├── apps/
 │   ├── cli/                    # `nichinichi` binary
 │   └── desktop/
@@ -58,12 +59,12 @@ types  ←  parser  ←  sync  ←  ai
 ## Key environment variables (CLI only)
 
 ```bash
-AI_API_KEY=sk-ant-...
-AI_BASE_URL=https://api.anthropic.com
-AI_MODEL=claude-sonnet-4-5
+AI_API_KEY=...                        # API key for your AI provider
+AI_BASE_URL=http://localhost:3000     # Open WebUI, Ollama, LiteLLM, etc.
+AI_MODEL=llama3.2
 ```
 
-The desktop app reads from `~/.nichinichi.yml` (set via Settings UI).
+The desktop app reads from `~/.nichinichi.yml` (configured via Settings UI). Environment variables are only used as a fallback when no config file exists.
 
 ## Database
 
@@ -96,4 +97,4 @@ cd apps/desktop
 pnpm tauri build
 ```
 
-Output is in `apps/desktop/src-tauri/target/release/bundle/`.
+Output is in `target/release/bundle/` (at the Cargo workspace root, not inside `apps/desktop`).

@@ -128,6 +128,8 @@ generated: 2026-03-17T18:00:00
 
 ## Saved AI conversation (`ai/YYYY-MM-DD-slug.md`)
 
+Conversations are **auto-saved** after every AI response and can be browsed, resumed, renamed, archived, or deleted from the history panel in the desktop app.
+
 ```markdown
 ---
 type: ai-conversation
@@ -139,7 +141,20 @@ org: acme
 **you:** when did i fix a jwt bug
 
 **nichinichi:** Based on your entries: jwt refresh bug fixed March 17...
+
+**you:** what about the refresh token specifically?
+
+**nichinichi:** Looking more closely at your entries from that day...
 ```
+
+**Frontmatter fields:**
+- `query` — first user message (used as the conversation title; updated when renamed via the UI)
+- `org` — active org filter at the time the conversation was started
+- `date` — date the conversation was first saved
+
+The body serializes all turns as `**you:**` / `**nichinichi:**` blocks so conversations can be fully reconstructed and resumed.
+
+Archived conversations are moved to `ai/archive/`.
 
 ## Config file (`~/.nichinichi.yml`)
 
