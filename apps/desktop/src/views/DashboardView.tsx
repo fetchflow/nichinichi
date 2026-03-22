@@ -9,6 +9,8 @@ import { useStats } from "../hooks/useStats";
 import { useGoals } from "../hooks/useGoals";
 import { useEntries } from "../hooks/useEntries";
 import { useActivity } from "../hooks/useActivity";
+import { useTimezone } from "../hooks/useTimezone";
+import { localDateStr } from "../utils/date";
 import { TYPE_COLORS } from "../types";
 import type { ActivityPayload } from "../types";
 
@@ -23,8 +25,9 @@ export function DashboardView({ activeOrg }: Props) {
   const { stats, loading: statsLoading } = useStats(org);
   const { goals, loading: goalsLoading } = useGoals("active", org);
   const { activity, loading: activityLoading } = useActivity(org);
+  const { timezone } = useTimezone();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDateStr(new Date(), timezone);
   const { entries: todayEntries, loading: entriesLoading } = useEntries(today, activeOrg);
 
   const [drill, setDrill] = useState<DrillPeriod | null>(null);
@@ -65,7 +68,7 @@ export function DashboardView({ activeOrg }: Props) {
         {statsLoading ? (
           <SkeletonBlock lines={1} />
         ) : (
-          <Heatmap cells={stats?.heatmap ?? []} />
+          <Heatmap cells={stats?.heatmap ?? []} timezone={timezone} />
         )}
       </section>
 

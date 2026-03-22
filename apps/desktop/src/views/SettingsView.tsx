@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import type { Theme } from "../hooks/useTheme";
+import { useTimezone, systemTimezone } from "../hooks/useTimezone";
 
 interface Props {
   theme: Theme;
@@ -13,6 +14,11 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const { timezone, setTimezone, resetToSystem } = useTimezone();
+  const systemTz = systemTimezone();
+  const isCustomTz = timezone !== systemTz;
+  const allTimezones: string[] = (Intl as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.("timeZone") ?? [];
 
   // Repo path
   const [repoPath, setRepoPath] = useState("");
@@ -138,6 +144,43 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing }: Props) 
               {t}
             </button>
           ))}
+        </div>
+      </section>
+
+      {/* Timezone */}
+      <section>
+        <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Timezone</h2>
+        <div className="space-y-2">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Display timezone</label>
+            <select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="w-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
+                         border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
+            >
+              {allTimezones.length > 0
+                ? allTimezones.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))
+                : <option value={timezone}>{timezone}</option>}
+            </select>
+          </div>
+          {isCustomTz && (
+            <button
+              onClick={resetToSystem}
+              className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
+            >
+              Reset to system timezone ({systemTz})
+            </button>
+          )}
+          {!isCustomTz && (
+            <p className="text-xs text-gray-400 dark:text-gray-600">
+              Using system timezone: {systemTz}
+            </p>
+          )}
         </div>
       </section>
 
