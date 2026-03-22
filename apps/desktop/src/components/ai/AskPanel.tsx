@@ -4,8 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AiMessage } from "../../hooks/useAi";
 
-function EntryBlock({ text }: { text: string }) {
-  const [added, setAdded] = useState(false);
+function EntryBlock({ text, added, onAdded }: { text: string; added: boolean; onAdded: (key: string) => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
@@ -14,7 +13,7 @@ function EntryBlock({ text }: { text: string }) {
     setLoading(true);
     try {
       await invoke("add_entry", { text: text.trim() });
-      setAdded(true);
+      onAdded(text.trim());
     } catch {
       setError(true);
     } finally {
@@ -77,6 +76,7 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState("");
+  const [addedEntries, setAddedEntries] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -396,7 +396,14 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
                         code({ className, children }) {
                           const lang = /language-(\w[\w-]*)/.exec(className ?? "")?.[1];
                           if (lang === "nichinichi-entry") {
-                            return <EntryBlock text={String(children)} />;
+                            const key = String(children).trim();
+                            return (
+                              <EntryBlock
+                                text={key}
+                                added={addedEntries.has(key)}
+                                onAdded={(k) => setAddedEntries((prev) => new Set(prev).add(k))}
+                              />
+                            );
                           }
                           return <code className={className}>{children}</code>;
                         },
