@@ -92,8 +92,9 @@ export function GoalsView({ activeOrg }: Props) {
     refs: [],
   });
   const [progressSaving, setProgressSaving] = useState(false);
-  const [dateEntries, setDateEntries] = useState<Entry[]>([]);
-  const [dateEntriesLoading, setDateEntriesLoading] = useState(false);
+  const [refCache, setRefCache] = useState<Entry[]>([]);
+  const [refCacheLoading, setRefCacheLoading] = useState(false);
+  const [refSearch, setRefSearch] = useState("");
 
   // Ref body lookup map
   const [refEntries, setRefEntries] = useState<Map<string, string>>(new Map());
@@ -167,22 +168,33 @@ export function GoalsView({ activeOrg }: Props) {
 
   // ── Progress ───────────────────────────────────────────────────────────────
 
+  // Load ref cache: last 14 days of entries, fetched once when form opens
   useEffect(() => {
-    if (!addingProgressId || !progressDraft.date) return;
-    setDateEntriesLoading(true);
-    invoke<Entry[]>("get_entries", { date: progressDraft.date })
-      .then(setDateEntries)
-      .catch(() => setDateEntries([]))
-      .finally(() => setDateEntriesLoading(false));
-  }, [addingProgressId, progressDraft.date]);
+    if (!addingProgressId) return;
+    setRefCacheLoading(true);
+    const today = new Date();
+    const dates = Array.from({ length: 14 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      return d.toISOString().slice(0, 10);
+    });
+    Promise.all(dates.map((date) => invoke<Entry[]>("get_entries", { date }).catch(() => [] as Entry[])))
+      .then((results) => setRefCache(results.flat()))
+      .finally(() => setRefCacheLoading(false));
+  }, [addingProgressId]);
 
   const openAddProgress = (goalId: string) => {
     setAddingProgressId(goalId);
     setProgressDraft({ date: new Date().toISOString().slice(0, 10), signal: "steady", note: "", refs: [] });
-    setDateEntries([]);
+    setRefSearch("");
+    setRefCache([]);
   };
 
-  const cancelAddProgress = () => { setAddingProgressId(null); setDateEntries([]); };
+  const cancelAddProgress = () => {
+    setAddingProgressId(null);
+    setRefSearch("");
+    setRefCache([]);
+  };
 
   const toggleRef = (ref: string) => {
     setProgressDraft((d) => ({ ...d, refs: d.refs.includes(ref) ? d.refs.filter((r) => r !== ref) : [...d.refs, ref] }));
@@ -198,7 +210,8 @@ export function GoalsView({ activeOrg }: Props) {
         [newEntry, ...goal.progress.map((p) => ({ date: p.period_start, signal: p.signal, note: p.note ?? undefined, refs: p.refs }))]
       );
       setAddingProgressId(null);
-      setDateEntries([]);
+      setRefSearch("");
+      setRefCache([]);
     } finally {
       setProgressSaving(false);
     }
@@ -210,6 +223,23 @@ export function GoalsView({ activeOrg }: Props) {
       goal.steps.map((s) => ({ title: s.title, done: s.status === "done", notes: s.notes ?? undefined, due_date: s.due_date ?? undefined })),
       goal.progress.filter((_, i) => i !== idx).map((p) => ({ date: p.period_start, signal: p.signal, note: p.note ?? undefined, refs: p.refs }))
     );
+  };
+
+  // ── Fuzzy search ───────────────────────────────────────────────────────────
+
+  const fuzzyScore = (query: string, text: string): number => {
+    if (!query) return 1;
+    const q = query.toLowerCase();
+    const t = text.toLowerCase();
+    let qi = 0, score = 0, lastMatch = -1;
+    for (let i = 0; i < t.length && qi < q.length; i++) {
+      if (t[i] === q[qi]) {
+        score += lastMatch === i - 1 ? 3 : 1; // bonus for consecutive chars
+        lastMatch = i;
+        qi++;
+      }
+    }
+    return qi === q.length ? score : 0;
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -394,24 +424,56 @@ export function GoalsView({ activeOrg }: Props) {
               className={`w-full ${inputCls} resize-none`}
               placeholder="note…"
             />
-            {dateEntriesLoading && <p className="text-xs text-gray-400 dark:text-gray-600">loading entries…</p>}
-            {!dateEntriesLoading && dateEntries.length > 0 && (
-              <div>
-                <p className="text-xs text-gray-400 dark:text-gray-600 mb-1">link entries from this date:</p>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {dateEntries.map((entry) => {
-                    const ref = `${entry.date} ${entry.time}`;
+            {/* Ref picker */}
+            <div className="space-y-1.5">
+              {progressDraft.refs.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {progressDraft.refs.map((ref) => {
+                    const body = refCache.find((e) => `${e.date} ${e.time}` === ref)?.body ?? refEntries.get(ref);
                     return (
-                      <label key={entry.id} className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={progressDraft.refs.includes(ref)} onChange={() => toggleRef(ref)} className="accent-green-500 shrink-0" />
-                        <span className="text-xs text-gray-500 font-mono shrink-0">{entry.time}</span>
-                        <span className="text-xs text-gray-600 dark:text-gray-400 truncate">{entry.body}</span>
-                      </label>
+                      <span key={ref} className="inline-flex items-center gap-1 text-xs bg-gray-200/60 dark:bg-gray-700/60 text-gray-600 dark:text-gray-400 rounded px-1.5 py-0.5 max-w-[200px]">
+                        <span className="font-mono shrink-0">{ref.split(" ")[1]}</span>
+                        {body && <span className="truncate">{body}</span>}
+                        <button onClick={() => toggleRef(ref)} className="shrink-0 text-gray-400 hover:text-red-400 ml-0.5">×</button>
+                      </span>
                     );
                   })}
                 </div>
+              )}
+              <div className="relative">
+                <input
+                  value={refSearch}
+                  onChange={(e) => setRefSearch(e.target.value)}
+                  className={`w-full ${inputCls}`}
+                  placeholder={refCacheLoading ? "loading entries…" : "search entries to link…"}
+                  disabled={refCacheLoading}
+                />
               </div>
-            )}
+              {refSearch && (() => {
+                const results = refCache
+                  .map((e) => ({ entry: e, score: fuzzyScore(refSearch, `${e.date} ${e.time} ${e.body}`) }))
+                  .filter(({ score }) => score > 0)
+                  .sort((a, b) => b.score - a.score)
+                  .slice(0, 20);
+                return results.length > 0 ? (
+                  <div className="space-y-0.5 max-h-36 overflow-y-auto border border-gray-200/60 dark:border-gray-700/60 rounded p-1">
+                    {results.map(({ entry }) => {
+                      const ref = `${entry.date} ${entry.time}`;
+                      const selected = progressDraft.refs.includes(ref);
+                      return (
+                        <label key={entry.id} className="flex items-center gap-2 cursor-pointer px-1 py-0.5 rounded hover:bg-gray-100/60 dark:hover:bg-gray-800/60">
+                          <input type="checkbox" checked={selected} onChange={() => toggleRef(ref)} className="accent-green-500 shrink-0" />
+                          <span className="text-xs text-gray-400 font-mono shrink-0">{entry.date} {entry.time}</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-400 truncate">{entry.body}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 dark:text-gray-600 px-1">no matches</p>
+                );
+              })()}
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={() => saveProgress(g)}
