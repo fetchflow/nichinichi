@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Background: rounded square, dark navy -->
+  <rect width="1024" height="1024" rx="220" ry="220" fill="#1a1a2e"/>
+
+  <!-- Kanji 日 (day/sun) — geometric path, warm amber/orange -->
+  <!-- Top bar -->
+  <rect x="362" y="300" width="300" height="52" rx="6" fill="#f0923e"/>
+  <!-- Bottom bar -->
+  <rect x="362" y="672" width="300" height="52" rx="6" fill="#f0923e"/>
+  <!-- Left bar -->
+  <rect x="362" y="300" width="52" height="424" rx="6" fill="#f0923e"/>
+  <!-- Right bar -->
+  <rect x="610" y="300" width="52" height="424" rx="6" fill="#f0923e"/>
+  <!-- Middle bar -->
+  <rect x="362" y="488" width="300" height="48" rx="6" fill="#f0923e"/>
+</svg>
