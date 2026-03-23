@@ -197,6 +197,7 @@ export default function App() {
               messages={ai.messages}
               streaming={ai.streaming}
               activeOrg={activeOrg}
+              availableOrgs={orgs}
               onAsk={(q, model) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg, model)}
               onClear={ai.clear}
               onClose={() => setAiOpen(false)}

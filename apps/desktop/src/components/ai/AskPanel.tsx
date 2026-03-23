@@ -67,7 +67,7 @@ function parseBlockMeta(raw: string): { meta: Record<string, string>; body: stri
 
 // ── GoalBlock ────────────────────────────────────────────────────────────────
 
-function GoalBlock({ text, added, onAdded }: { text: string; added: boolean; onAdded: (key: string) => void }) {
+function GoalBlock({ text, added, onAdded, orgs }: { text: string; added: boolean; onAdded: (key: string) => void; orgs: string[] }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
@@ -118,7 +118,10 @@ function GoalBlock({ text, added, onAdded }: { text: string; added: boolean; onA
             <option value="career">career</option>
             <option value="learning">learning</option>
           </select>
-          <input value={org} onChange={(e) => setOrg(e.target.value)} placeholder="@org" disabled={added} className={inputCls} />
+          <select value={org} onChange={(e) => setOrg(e.target.value)} disabled={added} className={inputCls}>
+            <option value="">no org</option>
+            {orgs.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
           <input value={horizon} onChange={(e) => setHorizon(e.target.value)} placeholder="horizon" disabled={added} className={inputCls} />
         </div>
         <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="Why (motivation)" disabled={added} className={inputCls} />
@@ -163,7 +166,7 @@ function GoalBlock({ text, added, onAdded }: { text: string; added: boolean; onA
 
 // ── PlaybookBlock ────────────────────────────────────────────────────────────
 
-function PlaybookBlock({ text, added, onAdded }: { text: string; added: boolean; onAdded: (key: string) => void }) {
+function PlaybookBlock({ text, added, onAdded, orgs }: { text: string; added: boolean; onAdded: (key: string) => void; orgs: string[] }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
@@ -232,7 +235,7 @@ function PlaybookBlock({ text, added, onAdded }: { text: string; added: boolean;
 
 // ── DigestBlock ──────────────────────────────────────────────────────────────
 
-function DigestBlock({ text, added, onAdded }: { text: string; added: boolean; onAdded: (key: string) => void }) {
+function DigestBlock({ text, added, onAdded, orgs }: { text: string; added: boolean; onAdded: (key: string) => void; orgs: string[] }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
@@ -322,13 +325,14 @@ interface Props {
   messages: AiMessage[];
   streaming: boolean;
   activeOrg: string;
+  availableOrgs: string[];
   onAsk: (query: string, model: string) => void;
   onClear: () => void;
   onClose: () => void;
   onLoad: (messages: AiMessage[]) => void;
 }
 
-export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClose, onLoad }: Props) {
+export function AskPanel({ messages, streaming, activeOrg, availableOrgs, onAsk, onClear, onClose, onLoad }: Props) {
   const [input, setInput] = useState("");
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
@@ -663,9 +667,9 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
                           const added = addedEntries.has(key);
                           const onAdded = (k: string) => setAddedEntries((prev) => new Set(prev).add(k));
                           if (lang === "nichinichi-entry")    return <EntryBlock    text={key} added={added} onAdded={onAdded} />;
-                          if (lang === "nichinichi-goal")     return <GoalBlock     text={key} added={added} onAdded={onAdded} />;
-                          if (lang === "nichinichi-playbook") return <PlaybookBlock text={key} added={added} onAdded={onAdded} />;
-                          if (lang === "nichinichi-digest")   return <DigestBlock   text={key} added={added} onAdded={onAdded} />;
+                          if (lang === "nichinichi-goal")     return <GoalBlock     text={key} added={added} onAdded={onAdded} orgs={availableOrgs} />;
+                          if (lang === "nichinichi-playbook") return <PlaybookBlock text={key} added={added} onAdded={onAdded} orgs={availableOrgs} />;
+                          if (lang === "nichinichi-digest")   return <DigestBlock   text={key} added={added} onAdded={onAdded} orgs={availableOrgs} />;
                           return <code className={className}>{children}</code>;
                         },
                       }}
