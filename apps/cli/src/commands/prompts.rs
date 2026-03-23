@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dialoguer::{Confirm, Editor, Input};
+use dialoguer::{Confirm, Editor, Input, Select};
 use std::io::IsTerminal;
 
 pub fn is_interactive() -> bool {
@@ -82,6 +82,42 @@ pub fn collect_steps() -> Result<Vec<String>> {
         }
     }
     Ok(steps)
+}
+
+const ENTRY_TYPES: &[&str] = &["log", "solution", "decision", "reflection", "score", "ai"];
+
+/// Select an entry type, pre-selecting `inferred` as the default.
+pub fn ask_entry_type(inferred: &str) -> Result<&'static str> {
+    let default_idx = ENTRY_TYPES.iter().position(|&t| t == inferred).unwrap_or(0);
+    let selection = Select::new()
+        .with_prompt("Entry type")
+        .items(ENTRY_TYPES)
+        .default(default_idx)
+        .interact()?;
+    Ok(ENTRY_TYPES[selection])
+}
+
+/// Ask for an org tag. `default` is pre-filled if set.
+/// Re-prompts until the value is alphanumeric+hyphens or empty (personal).
+pub fn ask_entry_org(default: Option<&str>) -> Result<Option<String>> {
+    let prompt = match default {
+        Some(d) => format!("Org (Enter for '{d}', blank to skip)"),
+        None => "Org, e.g. 'acme' (blank for personal)".to_string(),
+    };
+    loop {
+        let val: String = Input::new()
+            .with_prompt(&prompt)
+            .allow_empty(true)
+            .interact_text()?;
+        let val = val.trim().to_string();
+        if val.is_empty() {
+            return Ok(default.map(String::from));
+        }
+        if val.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+            return Ok(Some(val));
+        }
+        eprintln!("  (org must be alphanumeric with hyphens/underscores only, e.g. 'acme' or 'my-team')");
+    }
 }
 
 /// Opens $EDITOR on an existing file path (editor modifies the file in place).
