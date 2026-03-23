@@ -18,15 +18,27 @@ jobs:
           - platform: macos-latest   # arm64 (Apple Silicon)
             args: '--target aarch64-apple-darwin'
             rust-targets: aarch64-apple-darwin
+            cli-target: '--target aarch64-apple-darwin'
+            cli-binary: target/aarch64-apple-darwin/release/nichinichi
+            cli-asset-name: nichinichi-aarch64-apple-darwin
           - platform: macos-13       # x86_64 (Intel)
             args: '--target x86_64-apple-darwin'
             rust-targets: x86_64-apple-darwin
+            cli-target: '--target x86_64-apple-darwin'
+            cli-binary: target/x86_64-apple-darwin/release/nichinichi
+            cli-asset-name: nichinichi-x86_64-apple-darwin
           - platform: ubuntu-22.04
             args: ''
             rust-targets: ''
+            cli-target: ''
+            cli-binary: target/release/nichinichi
+            cli-asset-name: nichinichi-x86_64-linux
           - platform: windows-latest
             args: ''
             rust-targets: ''
+            cli-target: ''
+            cli-binary: target/release/nichinichi.exe
+            cli-asset-name: nichinichi-x86_64-windows.exe
 
     runs-on: ${{ matrix.platform }}
 
@@ -79,6 +91,7 @@ jobs:
           releaseBody: |
             Download the installer for your platform from the assets below.
 
+            ### Desktop app
             | Platform | File |
             |---|---|
             | macOS (Apple Silicon) | `Nichinichi_*_aarch64.dmg` |
@@ -86,6 +99,29 @@ jobs:
             | Windows | `Nichinichi_*_x64-setup.exe` |
             | Linux (Debian/Ubuntu) | `nichinichi_*_amd64.deb` |
             | Linux (universal) | `nichinichi_*_amd64.AppImage` |
+
+            ### CLI (`nichinichi` binary)
+            | Platform | File |
+            |---|---|
+            | macOS (Apple Silicon) | `nichinichi-aarch64-apple-darwin` |
+            | macOS (Intel) | `nichinichi-x86_64-apple-darwin` |
+            | Linux | `nichinichi-x86_64-linux` |
+            | Windows | `nichinichi-x86_64-windows.exe` |
+
+            Install: download the binary for your platform, make it executable (`chmod +x nichinichi-*` on macOS/Linux), and move it to a directory on your `$PATH`.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Build CLI binary
+        if: startsWith(github.ref, 'refs/tags/')
+        run: cargo build -p nichinichi-cli --release ${{ matrix.cli-target }}
+
+      - name: Upload CLI binary to release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp ${{ matrix.cli-binary }} ${{ matrix.cli-asset-name }}
+          gh release upload ${{ github.ref_name }} ${{ matrix.cli-asset-name }} --clobber
