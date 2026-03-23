@@ -515,6 +515,7 @@ pub async fn ai_ask(
 
 #[tauri::command]
 pub async fn save_ai_conversation_cmd(
+    app: tauri::AppHandle,
     messages: Vec<ChatMessage>,
     org: Option<String>,
     state: State<'_, Mutex<AppState>>,
@@ -526,6 +527,7 @@ pub async fn save_ai_conversation_cmd(
     save_conversation(&repo, &messages, org.as_deref(), None)
         .await
         .map_err(|e| e.to_string())?;
+    let _ = app.emit("ai-saved", ());
     Ok(())
 }
 

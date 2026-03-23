@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -402,6 +403,12 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, onAsk,
       .then(setHistory)
       .catch(() => {});
   };
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("ai-saved", () => refreshHistory()).then((fn) => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, [activeOrg]);
 
   const handleLoadConversation = async (conv: AiConversationSummary) => {
     try {
