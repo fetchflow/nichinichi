@@ -5,7 +5,8 @@
       "Bash(cargo check:*)",
       "Bash(pnpm tsc:*)",
       "Bash(pnpm add:*)",
-      "Bash(file /Users/davidlu/ghq/github.com/fetchflow/devlog-mark-01/apps/desktop/src-tauri/icons/*)"
+      "Bash(file /Users/davidlu/ghq/github.com/fetchflow/devlog-mark-01/apps/desktop/src-tauri/icons/*)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
