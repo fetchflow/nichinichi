@@ -4,6 +4,7 @@ use colored::Colorize;
 use nichinichi_parser::entry::parse_entry_file;
 use nichinichi_sync::{open_db, LocalSqlite, SyncTarget};
 use nichinichi_types::Config;
+use sqlx::SqlitePool;
 use std::io::Write;
 use std::path::Path;
 
@@ -14,9 +15,13 @@ pub async fn run(config: &Config, text: &str) -> Result<()> {
     let date = now.format("%Y-%m-%d").to_string();
     let time = now.format("%H:%M").to_string();
 
+    // Open the pool early so we can query known orgs for the prompt
+    let pool = open_db(&config.repo).await?;
+
     // Enrich text with missing org / type tags before writing
     let text = if prompts::is_interactive() {
-        enrich_entry_text(text, config.effective_org())?
+        let known_orgs = query_known_orgs(&pool).await?;
+        enrich_entry_text(text, config.effective_org(), &known_orgs)?
     } else {
         text.to_string()
     };
@@ -40,9 +45,6 @@ pub async fn run(config: &Config, text: &str) -> Result<()> {
     }
     writeln!(file, "\n---\n{entry_line}\n---")?;
     drop(file);
-
-    // Sync the file to SQLite
-    let pool = open_db(&config.repo).await?;
     let content = std::fs::read_to_string(&daily_file)?;
     let default_org = config.effective_org();
     let entries = parse_entry_file(&content, &date, default_org)?;
@@ -73,7 +75,7 @@ pub async fn run(config: &Config, text: &str) -> Result<()> {
 }
 
 /// Prompts for missing #type and @org tags, returning an enriched text string.
-fn enrich_entry_text(text: &str, default_org: Option<&str>) -> Result<String> {
+fn enrich_entry_text(text: &str, default_org: Option<&str>, known_orgs: &[String]) -> Result<String> {
     let mut out = text.to_string();
 
     if !has_type_tag(text) {
@@ -83,12 +85,22 @@ fn enrich_entry_text(text: &str, default_org: Option<&str>) -> Result<String> {
     }
 
     if !has_org_tag(text) {
-        if let Some(org) = prompts::ask_entry_org(default_org)? {
+        if let Some(org) = prompts::ask_entry_org(known_orgs, default_org)? {
             out = format!("{out} @{org}");
         }
     }
 
     Ok(out)
+}
+
+/// Query distinct org values from the entries table.
+async fn query_known_orgs(pool: &SqlitePool) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT DISTINCT org FROM entries WHERE org IS NOT NULL ORDER BY org",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(org,)| org).collect())
 }
 
 /// Returns true if the text already contains an explicit @org tag.

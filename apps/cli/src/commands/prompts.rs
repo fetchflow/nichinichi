@@ -97,26 +97,51 @@ pub fn ask_entry_type(inferred: &str) -> Result<&'static str> {
     Ok(ENTRY_TYPES[selection])
 }
 
-/// Ask for an org tag. `default` is pre-filled if set.
-/// Re-prompts until the value is alphanumeric+hyphens or empty (personal).
-pub fn ask_entry_org(default: Option<&str>) -> Result<Option<String>> {
-    let prompt = match default {
-        Some(d) => format!("Org (Enter for '{d}', blank to skip)"),
-        None => "Org, e.g. 'acme' (blank for personal)".to_string(),
-    };
+/// Select an org from known orgs, with "personal" and "enter new…" options.
+/// `known_orgs` comes from `SELECT DISTINCT org FROM entries`.
+/// `default` is pre-selected if it appears in the list.
+pub fn ask_entry_org(known_orgs: &[String], default: Option<&str>) -> Result<Option<String>> {
+    const PERSONAL: &str = "— personal (no org) —";
+    const NEW: &str = "+ enter new org";
+
+    // Build item list: known orgs, then personal, then new-entry option
+    let mut items: Vec<&str> = known_orgs.iter().map(String::as_str).collect();
+    items.push(PERSONAL);
+    items.push(NEW);
+
+    // Pre-select the default org if it's in the list, otherwise personal
+    let default_idx = default
+        .and_then(|d| items.iter().position(|&i| i == d))
+        .unwrap_or(items.len() - 2); // "personal"
+
+    let selection = Select::new()
+        .with_prompt("Org")
+        .items(&items)
+        .default(default_idx)
+        .interact()?;
+
+    match items[selection] {
+        PERSONAL => Ok(None),
+        NEW => ask_new_org(),
+        chosen => Ok(Some(chosen.to_string())),
+    }
+}
+
+/// Text input fallback for entering a new org not yet in the DB.
+fn ask_new_org() -> Result<Option<String>> {
     loop {
         let val: String = Input::new()
-            .with_prompt(&prompt)
+            .with_prompt("Org name (alphanumeric + hyphens, blank for personal)")
             .allow_empty(true)
             .interact_text()?;
         let val = val.trim().to_string();
         if val.is_empty() {
-            return Ok(default.map(String::from));
+            return Ok(None);
         }
         if val.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
             return Ok(Some(val));
         }
-        eprintln!("  (org must be alphanumeric with hyphens/underscores only, e.g. 'acme' or 'my-team')");
+        eprintln!("  (must be alphanumeric with hyphens/underscores only, e.g. 'acme' or 'my-team')");
     }
 }
 
