@@ -333,13 +333,15 @@ interface Props {
   streaming: boolean;
   activeOrg: string;
   availableOrgs: string[];
+  layout: "panel" | "half" | "full";
   onAsk: (query: string, model: string) => void;
   onClear: () => void;
   onClose: () => void;
   onLoad: (messages: AiMessage[]) => void;
+  onLayoutChange: (layout: "panel" | "half" | "full") => void;
 }
 
-export function AskPanel({ messages, streaming, activeOrg, availableOrgs, onAsk, onClear, onClose, onLoad }: Props) {
+export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout, onAsk, onClear, onClose, onLoad, onLayoutChange }: Props) {
   const [input, setInput] = useState("");
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
@@ -506,6 +508,33 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, onAsk,
               </svg>
             </button>
           )}
+          <button
+            onClick={() => onLayoutChange(layout === "half" ? "panel" : "half")}
+            title={layout === "half" ? "Restore panel" : "Half screen"}
+            className={`p-1 rounded transition-colors ${
+              layout === "half"
+                ? "text-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+            }`}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="1" />
+              <line x1="12" y1="3" x2="12" y2="21" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onLayoutChange(layout === "full" ? "panel" : "full")}
+            title={layout === "full" ? "Restore panel" : "Full screen"}
+            className={`p-1 rounded transition-colors ${
+              layout === "full"
+                ? "text-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+            }`}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="1" />
+            </svg>
+          </button>
           <button
             onClick={onClose}
             title="Close"
