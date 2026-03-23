@@ -46,6 +46,245 @@ function EntryBlock({ text, added, onAdded }: { text: string; added: boolean; on
   );
 }
 
+// ── Shared block parsing ────────────────────────────────────────────────────
+
+function parseBlockMeta(raw: string): { meta: Record<string, string>; body: string } {
+  const lines = raw.trim().split("\n");
+  const meta: Record<string, string> = {};
+  let i = 0;
+  while (i < lines.length && lines[i].includes(":") && !lines[i].startsWith(" ") && !lines[i].startsWith("\t")) {
+    const colonIdx = lines[i].indexOf(":");
+    const k = lines[i].slice(0, colonIdx).trim();
+    const v = lines[i].slice(colonIdx + 1).trim();
+    if (k) meta[k] = v;
+    i++;
+  }
+  // skip blank separator line
+  if (i < lines.length && lines[i].trim() === "") i++;
+  const body = lines.slice(i).join("\n").trim();
+  return { meta, body };
+}
+
+// ── GoalBlock ────────────────────────────────────────────────────────────────
+
+function GoalBlock({ text, added, onAdded }: { text: string; added: boolean; onAdded: (key: string) => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  const { meta, body } = parseBlockMeta(text);
+  const title = meta["title"] ?? "";
+  const goalType = meta["type"] ?? "career";
+  const org = meta["org"] && meta["org"] !== "null" ? meta["org"] : undefined;
+  const horizon = meta["horizon"] && meta["horizon"] !== "null" ? meta["horizon"] : undefined;
+  const why = meta["why"] && meta["why"] !== "null" ? meta["why"] : undefined;
+  const steps = body
+    .split("\n")
+    .filter((l) => l.startsWith("- ") && !l.startsWith("- [ ]") && !l.startsWith("- [x]") || l.match(/^-\s/))
+    .map((l) => l.replace(/^-\s+/, "").trim())
+    .filter(Boolean);
+  // also parse after "steps:" header
+  const stepsBody = body.includes("steps:") ? body.split("steps:").slice(1).join("steps:") : body;
+  const parsedSteps = stepsBody
+    .split("\n")
+    .filter((l) => l.trim().startsWith("- "))
+    .map((l) => l.trim().replace(/^-\s+/, "").trim())
+    .filter(Boolean);
+  const finalSteps = parsedSteps.length > 0 ? parsedSteps : steps;
+
+  const handleAdd = async () => {
+    if (added || loading || !title) return;
+    setLoading(true);
+    try {
+      await invoke("create_goal_from_ai", {
+        title,
+        goalType,
+        org: org ?? null,
+        horizon: horizon ?? null,
+        why: why ?? null,
+        steps: finalSteps,
+      });
+      onAdded(text.trim());
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="my-2 rounded-lg border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/10 overflow-hidden">
+      <div className="px-3 py-2">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className="text-xs font-bold text-indigo-900 dark:text-indigo-100">{title || "Goal"}</span>
+          <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{goalType}</span>
+          {org && <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">@{org}</span>}
+          {horizon && <span className="text-xs text-indigo-500 dark:text-indigo-400">{horizon}</span>}
+        </div>
+        {why && <p className="text-xs italic text-indigo-600 dark:text-indigo-400 mb-1">{why}</p>}
+        {finalSteps.length > 0 && (
+          <ul className="mt-1 space-y-0.5">
+            {finalSteps.map((s, i) => (
+              <li key={i} className="text-xs text-indigo-700 dark:text-indigo-300 flex gap-1.5">
+                <span className="opacity-50">☐</span><span>{s}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="px-3 py-2 border-t border-indigo-200 dark:border-indigo-800/50 flex items-center gap-2">
+        <button
+          onClick={handleAdd}
+          disabled={added || loading || !title}
+          className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
+            ${added
+              ? "bg-green-500 opacity-50 cursor-not-allowed"
+              : loading
+              ? "bg-indigo-400 opacity-50 cursor-not-allowed"
+              : !title
+              ? "bg-indigo-300 cursor-not-allowed"
+              : "bg-indigo-500 hover:bg-indigo-600 cursor-pointer"
+            }`}
+        >
+          {added ? "Added ✓" : loading ? "Adding…" : "Add goal"}
+        </button>
+        {error && <span className="text-xs text-red-500">Failed to add goal</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── PlaybookBlock ────────────────────────────────────────────────────────────
+
+function PlaybookBlock({ text, added, onAdded }: { text: string; added: boolean; onAdded: (key: string) => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  const { meta, body } = parseBlockMeta(text);
+  const title = meta["title"] ?? "";
+  const tags = (meta["tags"] ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+  const org = meta["org"] && meta["org"] !== "null" ? meta["org"] : undefined;
+  const previewLines = body.split("\n").slice(0, 3).join("\n");
+
+  const handleAdd = async () => {
+    if (added || loading || !title) return;
+    setLoading(true);
+    try {
+      await invoke("create_playbook_from_ai", {
+        title,
+        tags,
+        org: org ?? null,
+        content: body,
+      });
+      onAdded(text.trim());
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="my-2 rounded-lg border border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-900/10 overflow-hidden">
+      <div className="px-3 py-2">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className="text-xs font-bold text-violet-900 dark:text-violet-100">{title || "Playbook"}</span>
+          {tags.map((t) => (
+            <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-800/40 text-violet-700 dark:text-violet-300">{t}</span>
+          ))}
+          {org && <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-800/40 text-violet-700 dark:text-violet-300">@{org}</span>}
+        </div>
+        {previewLines && (
+          <p className="text-xs font-mono text-violet-700 dark:text-violet-300 whitespace-pre-wrap line-clamp-3">{previewLines}</p>
+        )}
+      </div>
+      <div className="px-3 py-2 border-t border-violet-200 dark:border-violet-800/50 flex items-center gap-2">
+        <button
+          onClick={handleAdd}
+          disabled={added || loading || !title}
+          className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
+            ${added
+              ? "bg-green-500 opacity-50 cursor-not-allowed"
+              : loading
+              ? "bg-violet-400 opacity-50 cursor-not-allowed"
+              : !title
+              ? "bg-violet-300 cursor-not-allowed"
+              : "bg-violet-500 hover:bg-violet-600 cursor-pointer"
+            }`}
+        >
+          {added ? "Added ✓" : loading ? "Adding…" : "Add playbook"}
+        </button>
+        {error && <span className="text-xs text-red-500">Failed to add playbook</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── DigestBlock ──────────────────────────────────────────────────────────────
+
+function DigestBlock({ text, added, onAdded }: { text: string; added: boolean; onAdded: (key: string) => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  const { meta, body } = parseBlockMeta(text);
+  const digestType = meta["type"] ?? "weekly";
+  const periodStart = meta["period_start"] ?? "";
+  const periodEnd = meta["period_end"] ?? "";
+  const org = meta["org"] && meta["org"] !== "null" ? meta["org"] : undefined;
+  const previewLines = body.split("\n").slice(0, 2).join(" ").slice(0, 120);
+
+  const handleAdd = async () => {
+    if (added || loading) return;
+    setLoading(true);
+    try {
+      await invoke("save_digest_from_ai", {
+        digestType,
+        periodStart,
+        periodEnd,
+        org: org ?? null,
+        content: body,
+      });
+      onAdded(text.trim());
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="my-2 rounded-lg border border-teal-200 dark:border-teal-800/50 bg-teal-50 dark:bg-teal-900/10 overflow-hidden">
+      <div className="px-3 py-2">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className="text-xs font-bold text-teal-900 dark:text-teal-100 capitalize">{digestType} report</span>
+          {(periodStart || periodEnd) && (
+            <span className="text-xs text-teal-600 dark:text-teal-400">{periodStart} → {periodEnd}</span>
+          )}
+          {org && <span className="text-xs px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-800/40 text-teal-700 dark:text-teal-300">@{org}</span>}
+        </div>
+        {previewLines && (
+          <p className="text-xs text-teal-700 dark:text-teal-300 line-clamp-2">{previewLines}</p>
+        )}
+      </div>
+      <div className="px-3 py-2 border-t border-teal-200 dark:border-teal-800/50 flex items-center gap-2">
+        <button
+          onClick={handleAdd}
+          disabled={added || loading}
+          className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
+            ${added
+              ? "bg-green-500 opacity-50 cursor-not-allowed"
+              : loading
+              ? "bg-teal-400 opacity-50 cursor-not-allowed"
+              : "bg-teal-500 hover:bg-teal-600 cursor-pointer"
+            }`}
+        >
+          {added ? "Saved ✓" : loading ? "Saving…" : "Save report"}
+        </button>
+        {error && <span className="text-xs text-red-500">Failed to save report</span>}
+      </div>
+    </div>
+  );
+}
+
 interface AiConversationSummary {
   id: string;
   date: string;
@@ -395,16 +634,13 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
                       components={{
                         code({ className, children }) {
                           const lang = /language-(\w[\w-]*)/.exec(className ?? "")?.[1];
-                          if (lang === "nichinichi-entry") {
-                            const key = String(children).trim();
-                            return (
-                              <EntryBlock
-                                text={key}
-                                added={addedEntries.has(key)}
-                                onAdded={(k) => setAddedEntries((prev) => new Set(prev).add(k))}
-                              />
-                            );
-                          }
+                          const key = String(children).trim();
+                          const added = addedEntries.has(key);
+                          const onAdded = (k: string) => setAddedEntries((prev) => new Set(prev).add(k));
+                          if (lang === "nichinichi-entry")    return <EntryBlock    text={key} added={added} onAdded={onAdded} />;
+                          if (lang === "nichinichi-goal")     return <GoalBlock     text={key} added={added} onAdded={onAdded} />;
+                          if (lang === "nichinichi-playbook") return <PlaybookBlock text={key} added={added} onAdded={onAdded} />;
+                          if (lang === "nichinichi-digest")   return <DigestBlock   text={key} added={added} onAdded={onAdded} />;
                           return <code className={className}>{children}</code>;
                         },
                       }}
