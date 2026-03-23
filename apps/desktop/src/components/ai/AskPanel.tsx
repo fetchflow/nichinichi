@@ -205,7 +205,10 @@ function PlaybookBlock({ text, added, onAdded, orgs }: { text: string; added: bo
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" disabled={added} className={inputCls} />
         <div className="flex gap-1.5">
           <input value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="tags, comma-separated" disabled={added} className={inputCls} />
-          <input value={org} onChange={(e) => setOrg(e.target.value)} placeholder="@org" disabled={added} className={`${inputCls} w-28`} />
+          <select value={org} onChange={(e) => setOrg(e.target.value)} disabled={added} className={`${inputCls} w-28`}>
+            <option value="">no org</option>
+            {orgs.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
         </div>
         <textarea
           value={content}
