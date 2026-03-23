@@ -70,18 +70,19 @@ pub async fn run(config: &Config, text: &str) -> Result<()> {
 /// We trim that trailer and re-append it after the indented detail block.
 fn append_detail_to_entry(path: &Path, detail: &str) -> Result<()> {
     let content = std::fs::read_to_string(path)?;
-    // The file ends with "...\nHH:MM | body\n---"
-    // Strip the trailing "---", inject blank line + 7-space-indented lines, re-add "---"
-    let base = content
+    // writeln! leaves a trailing \n, so content ends with "---\n".
+    // Trim whitespace first, then strip the closing "---, then trim again.
+    let trimmed = content.trim_end();
+    let base = trimmed
         .strip_suffix("---")
-        .unwrap_or(&content)
-        .trim_end_matches('\n');
+        .ok_or_else(|| anyhow::anyhow!("entry file missing closing ---"))?
+        .trim_end();
     let indented = detail
         .lines()
         .map(|l| format!("       {l}"))
         .collect::<Vec<_>>()
         .join("\n");
-    let updated = format!("{base}\n\n{indented}\n---");
+    let updated = format!("{base}\n\n{indented}\n---\n");
     std::fs::write(path, updated)?;
     Ok(())
 }
