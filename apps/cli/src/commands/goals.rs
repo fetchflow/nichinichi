@@ -6,6 +6,8 @@ use nichinichi_sync::{open_db, LocalSqlite, SyncTarget};
 use nichinichi_types::{Config, GoalStatus};
 use std::io::Write;
 
+use super::prompts;
+
 pub async fn list(config: &Config) -> Result<()> {
     let goals_dir = config.repo.join("goals").join("active");
     if !goals_dir.exists() {
@@ -70,9 +72,28 @@ pub async fn add(config: &Config, title: &str, goal_type: &str) -> Result<()> {
         anyhow::bail!("goal '{}' already exists", slug);
     }
 
+    // Collect optional fields interactively
+    let (why, horizon, org, steps) = if prompts::is_interactive() {
+        let why     = prompts::ask_optional("Why this goal? (Enter to skip)")?;
+        let horizon = prompts::ask_optional("Target horizon, e.g. 'end of 2027' (Enter to skip)")?;
+        let org     = prompts::ask_optional("Org, e.g. 'acme' (Enter to skip)")?;
+        let steps   = prompts::collect_steps()?;
+        (why, horizon, org, steps)
+    } else {
+        (None, None, None, vec!["first step".to_string()])
+    };
+
+    let why_str     = why.as_deref().unwrap_or("").to_string();
+    let horizon_str = horizon.as_deref().unwrap_or("null").to_string();
+    let org_str     = org.as_deref().unwrap_or("null").to_string();
+    let steps_md    = steps.iter()
+        .map(|s| format!("- [ ] {s}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
     let today = Local::now().format("%Y-%m-%d").to_string();
     let content = format!(
-        "---\ntype: {goal_type}\norg: null\nhorizon: null\nstatus: active\nwhy: \ncreated: {today}\n---\n\n# {title}\n\n## steps\n\n- [ ] first step\n\n## progress\n"
+        "---\ntype: {goal_type}\norg: {org_str}\nhorizon: {horizon_str}\nstatus: active\nwhy: {why_str}\ncreated: {today}\n---\n\n# {title}\n\n## steps\n\n{steps_md}\n\n## progress\n"
     );
 
     let mut file = std::fs::File::create(&path)?;

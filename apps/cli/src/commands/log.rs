@@ -5,6 +5,9 @@ use nichinichi_parser::entry::parse_entry_file;
 use nichinichi_sync::{open_db, LocalSqlite, SyncTarget};
 use nichinichi_types::Config;
 use std::io::Write;
+use std::path::Path;
+
+use super::prompts;
 
 pub async fn run(config: &Config, text: &str) -> Result<()> {
     let now = Local::now();
@@ -42,5 +45,43 @@ pub async fn run(config: &Config, text: &str) -> Result<()> {
     }
 
     println!("{} {}", "logged".green().bold(), entry_line);
+
+    // Optionally collect a multi-line detail block (interactive only)
+    if prompts::is_interactive() {
+        if let Some(detail) = prompts::ask_detail(&config.editor)? {
+            if !detail.trim().is_empty() {
+                append_detail_to_entry(&daily_file, &detail)?;
+                // Re-sync so SQLite reflects the detail block
+                let content = std::fs::read_to_string(&daily_file)?;
+                let entries = parse_entry_file(&content, &date, default_org)?;
+                for entry in &entries {
+                    target.upsert_entry(entry).await?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Appends an indented detail block to the last entry in a daily file.
+///
+/// The file was just written with the closing `---` as the final line.
+/// We trim that trailer and re-append it after the indented detail block.
+fn append_detail_to_entry(path: &Path, detail: &str) -> Result<()> {
+    let content = std::fs::read_to_string(path)?;
+    // The file ends with "...\nHH:MM | body\n---"
+    // Strip the trailing "---", inject blank line + 7-space-indented lines, re-add "---"
+    let base = content
+        .strip_suffix("---")
+        .unwrap_or(&content)
+        .trim_end_matches('\n');
+    let indented = detail
+        .lines()
+        .map(|l| format!("       {l}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let updated = format!("{base}\n\n{indented}\n---");
+    std::fs::write(path, updated)?;
     Ok(())
 }

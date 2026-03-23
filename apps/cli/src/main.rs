@@ -57,6 +57,22 @@ enum Command {
         #[arg(long, short = 'y')]
         yes: bool,
     },
+    /// Manage playbooks
+    Playbooks {
+        #[command(subcommand)]
+        action: PlaybookAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum PlaybookAction {
+    /// Add a new playbook
+    Add {
+        /// Playbook title (omit to be prompted)
+        title: Option<String>,
+    },
+    /// List all playbooks
+    List,
 }
 
 #[derive(Subcommand)]
@@ -97,6 +113,12 @@ async fn main() -> Result<()> {
             GoalAction::Done { slug } => commands::goals::done(&config, &slug).await,
         },
         Some(Command::Archive { year, yes }) => commands::archive::run(&config, year, yes).await,
+        Some(Command::Playbooks { action }) => match action {
+            PlaybookAction::Add { title } => {
+                commands::playbooks::add(&config, title.as_deref()).await
+            }
+            PlaybookAction::List => commands::playbooks::list(&config).await,
+        },
         None => {
             // No subcommand and no entry text — print help
             use clap::CommandFactory;
