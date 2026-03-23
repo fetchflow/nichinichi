@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -46,6 +47,279 @@ function EntryBlock({ text, added, onAdded }: { text: string; added: boolean; on
   );
 }
 
+// ── Shared block parsing ────────────────────────────────────────────────────
+
+function parseBlockMeta(raw: string): { meta: Record<string, string>; body: string } {
+  const lines = raw.trim().split("\n");
+  const meta: Record<string, string> = {};
+  let i = 0;
+  while (i < lines.length && lines[i].includes(":") && !lines[i].startsWith(" ") && !lines[i].startsWith("\t")) {
+    const colonIdx = lines[i].indexOf(":");
+    const k = lines[i].slice(0, colonIdx).trim();
+    const v = lines[i].slice(colonIdx + 1).trim();
+    if (k) meta[k] = v;
+    i++;
+  }
+  // skip blank separator line
+  if (i < lines.length && lines[i].trim() === "") i++;
+  const body = lines.slice(i).join("\n").trim();
+  return { meta, body };
+}
+
+// ── GoalBlock ────────────────────────────────────────────────────────────────
+
+function GoalBlock({ text, added, onAdded, orgs }: { text: string; added: boolean; onAdded: (key: string) => void; orgs: string[] }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  const { meta, body } = parseBlockMeta(text);
+  const stepsBody = body.includes("steps:") ? body.split("steps:").slice(1).join("steps:") : body;
+  const initialSteps = stepsBody
+    .split("\n")
+    .filter((l) => l.trim().startsWith("- "))
+    .map((l) => l.trim().replace(/^-\s+/, "").trim())
+    .filter(Boolean);
+
+  const [title, setTitle] = useState(meta["title"] ?? "");
+  const [goalType, setGoalType] = useState(meta["type"] ?? "career");
+  const [org, setOrg] = useState(meta["org"] && meta["org"] !== "null" ? meta["org"] : "");
+  const [horizon, setHorizon] = useState(meta["horizon"] && meta["horizon"] !== "null" ? meta["horizon"] : "");
+  const [why, setWhy] = useState(meta["why"] && meta["why"] !== "null" ? meta["why"] : "");
+  const [steps, setSteps] = useState<string[]>(initialSteps.length > 0 ? initialSteps : [""]);
+
+  const inputCls = "w-full text-xs px-2 py-1 rounded border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-400";
+
+  const handleAdd = async () => {
+    if (added || loading || !title.trim()) return;
+    setLoading(true);
+    try {
+      await invoke("create_goal_from_ai", {
+        title: title.trim(),
+        goalType,
+        org: org.trim() || null,
+        horizon: horizon.trim() || null,
+        why: why.trim() || null,
+        steps: steps.map((s) => s.trim()).filter(Boolean),
+      });
+      onAdded(text.trim());
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="my-2 rounded-lg border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/10 overflow-hidden">
+      <div className="px-3 pt-2 pb-1 text-xs font-semibold text-indigo-500 dark:text-indigo-400 uppercase tracking-wide">Goal</div>
+      <div className="px-3 pb-2 space-y-1.5">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" disabled={added} className={inputCls} />
+        <div className="flex gap-1.5">
+          <select value={goalType} onChange={(e) => setGoalType(e.target.value)} disabled={added} className={`${inputCls} w-auto`}>
+            <option value="career">career</option>
+            <option value="learning">learning</option>
+          </select>
+          <select value={org} onChange={(e) => setOrg(e.target.value)} disabled={added} className={inputCls}>
+            <option value="">no org</option>
+            {orgs.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <input value={horizon} onChange={(e) => setHorizon(e.target.value)} placeholder="horizon" disabled={added} className={inputCls} />
+        </div>
+        <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="Why (motivation)" disabled={added} className={inputCls} />
+        <div className="space-y-1">
+          <div className="text-xs text-indigo-500 dark:text-indigo-400">Steps</div>
+          {steps.map((s, i) => (
+            <div key={i} className="flex gap-1">
+              <input
+                value={s}
+                onChange={(e) => setSteps(steps.map((v, j) => j === i ? e.target.value : v))}
+                placeholder={`Step ${i + 1}`}
+                disabled={added}
+                className={inputCls}
+              />
+              {!added && steps.length > 1 && (
+                <button onClick={() => setSteps(steps.filter((_, j) => j !== i))} className="text-xs text-indigo-400 hover:text-indigo-600 px-1">✕</button>
+              )}
+            </div>
+          ))}
+          {!added && (
+            <button onClick={() => setSteps([...steps, ""])} className="text-xs text-indigo-500 hover:text-indigo-700 dark:text-indigo-400">+ Add step</button>
+          )}
+        </div>
+      </div>
+      <div className="px-3 py-2 border-t border-indigo-200 dark:border-indigo-800/50 flex items-center gap-2">
+        <button
+          onClick={handleAdd}
+          disabled={added || loading || !title.trim()}
+          className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
+            ${added ? "bg-green-500 opacity-50 cursor-not-allowed"
+              : loading ? "bg-indigo-400 opacity-50 cursor-not-allowed"
+              : !title.trim() ? "bg-indigo-300 cursor-not-allowed"
+              : "bg-indigo-500 hover:bg-indigo-600 cursor-pointer"}`}
+        >
+          {added ? "Added ✓" : loading ? "Adding…" : "Add goal"}
+        </button>
+        {error && <span className="text-xs text-red-500">Failed to add goal</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── PlaybookBlock ────────────────────────────────────────────────────────────
+
+function PlaybookBlock({ text, added, onAdded, orgs }: { text: string; added: boolean; onAdded: (key: string) => void; orgs: string[] }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  const { meta, body } = parseBlockMeta(text);
+
+  const [title, setTitle] = useState(meta["title"] ?? "");
+  const [tagsInput, setTagsInput] = useState((meta["tags"] ?? "").split(",").map((t) => t.trim()).filter(Boolean).join(", "));
+  const [org, setOrg] = useState(meta["org"] && meta["org"] !== "null" ? meta["org"] : "");
+  const [content, setContent] = useState(body);
+
+  const inputCls = "w-full text-xs px-2 py-1 rounded border border-violet-200 dark:border-violet-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-violet-400";
+
+  const handleAdd = async () => {
+    if (added || loading || !title.trim()) return;
+    setLoading(true);
+    try {
+      await invoke("create_playbook_from_ai", {
+        title: title.trim(),
+        tags: tagsInput.split(",").map((t) => t.trim()).filter(Boolean),
+        org: org.trim() || null,
+        content: content.trim(),
+      });
+      onAdded(text.trim());
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="my-2 rounded-lg border border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-900/10 overflow-hidden">
+      <div className="px-3 pt-2 pb-1 text-xs font-semibold text-violet-500 dark:text-violet-400 uppercase tracking-wide">Playbook</div>
+      <div className="px-3 pb-2 space-y-1.5">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" disabled={added} className={inputCls} />
+        <div className="flex gap-1.5">
+          <input value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="tags, comma-separated" disabled={added} className={inputCls} />
+          <select value={org} onChange={(e) => setOrg(e.target.value)} disabled={added} className={`${inputCls} w-28`}>
+            <option value="">no org</option>
+            {orgs.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={5}
+          disabled={added}
+          placeholder="Steps / content"
+          className={`${inputCls} font-mono resize-y`}
+        />
+      </div>
+      <div className="px-3 py-2 border-t border-violet-200 dark:border-violet-800/50 flex items-center gap-2">
+        <button
+          onClick={handleAdd}
+          disabled={added || loading || !title.trim()}
+          className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
+            ${added ? "bg-green-500 opacity-50 cursor-not-allowed"
+              : loading ? "bg-violet-400 opacity-50 cursor-not-allowed"
+              : !title.trim() ? "bg-violet-300 cursor-not-allowed"
+              : "bg-violet-500 hover:bg-violet-600 cursor-pointer"}`}
+        >
+          {added ? "Added ✓" : loading ? "Adding…" : "Add playbook"}
+        </button>
+        {error && <span className="text-xs text-red-500">Failed to add playbook</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── DigestBlock ──────────────────────────────────────────────────────────────
+
+function DigestBlock({ text, added, onAdded, orgs }: { text: string; added: boolean; onAdded: (key: string) => void; orgs: string[] }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  const { meta, body } = parseBlockMeta(text);
+
+  const [digestType, setDigestType] = useState(meta["type"] ?? "weekly");
+  const [periodStart, setPeriodStart] = useState(meta["period_start"] ?? "");
+  const [periodEnd, setPeriodEnd] = useState(meta["period_end"] ?? "");
+  const [org, setOrg] = useState(meta["org"] && meta["org"] !== "null" ? meta["org"] : "");
+  const [content, setContent] = useState(body);
+
+  const inputCls = "w-full text-xs px-2 py-1 rounded border border-teal-200 dark:border-teal-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-teal-400";
+
+  const handleAdd = async () => {
+    if (added || loading) return;
+    setLoading(true);
+    try {
+      await invoke("save_digest_from_ai", {
+        digestType,
+        periodStart: periodStart.trim(),
+        periodEnd: periodEnd.trim(),
+        org: org.trim() || null,
+        content: content.trim(),
+      });
+      onAdded(text.trim());
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="my-2 rounded-lg border border-teal-200 dark:border-teal-800/50 bg-teal-50 dark:bg-teal-900/10 overflow-hidden">
+      <div className="px-3 pt-2 pb-1 text-xs font-semibold text-teal-500 dark:text-teal-400 uppercase tracking-wide">Report</div>
+      <div className="px-3 pb-2 space-y-1.5">
+        <div className="flex gap-1.5">
+          <select value={digestType} onChange={(e) => setDigestType(e.target.value)} disabled={added} className={`${inputCls} w-auto`}>
+            <option value="weekly">weekly</option>
+            <option value="monthly">monthly</option>
+            <option value="review">review</option>
+          </select>
+          <select value={org} onChange={(e) => setOrg(e.target.value)} disabled={added} className={`${inputCls} w-28`}>
+            <option value="">no org</option>
+            {orgs.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div className="flex gap-1.5">
+          <input value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} placeholder="period_start (YYYY-MM-DD)" disabled={added} className={inputCls} />
+          <input value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} placeholder="period_end (YYYY-MM-DD)" disabled={added} className={inputCls} />
+        </div>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={5}
+          disabled={added}
+          placeholder="Report content"
+          className={`${inputCls} resize-y`}
+        />
+      </div>
+      <div className="px-3 py-2 border-t border-teal-200 dark:border-teal-800/50 flex items-center gap-2">
+        <button
+          onClick={handleAdd}
+          disabled={added || loading}
+          className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
+            ${added
+              ? "bg-green-500 opacity-50 cursor-not-allowed"
+              : loading
+              ? "bg-teal-400 opacity-50 cursor-not-allowed"
+              : "bg-teal-500 hover:bg-teal-600 cursor-pointer"
+            }`}
+        >
+          {added ? "Saved ✓" : loading ? "Saving…" : "Save report"}
+        </button>
+        {error && <span className="text-xs text-red-500">Failed to save report</span>}
+      </div>
+    </div>
+  );
+}
+
 interface AiConversationSummary {
   id: string;
   date: string;
@@ -58,13 +332,14 @@ interface Props {
   messages: AiMessage[];
   streaming: boolean;
   activeOrg: string;
+  availableOrgs: string[];
   onAsk: (query: string, model: string) => void;
   onClear: () => void;
   onClose: () => void;
   onLoad: (messages: AiMessage[]) => void;
 }
 
-export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClose, onLoad }: Props) {
+export function AskPanel({ messages, streaming, activeOrg, availableOrgs, onAsk, onClear, onClose, onLoad }: Props) {
   const [input, setInput] = useState("");
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
@@ -134,6 +409,12 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
       .then(setHistory)
       .catch(() => {});
   };
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("ai-saved", () => refreshHistory()).then((fn) => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, [activeOrg]);
 
   const handleLoadConversation = async (conv: AiConversationSummary) => {
     try {
@@ -395,16 +676,13 @@ export function AskPanel({ messages, streaming, activeOrg, onAsk, onClear, onClo
                       components={{
                         code({ className, children }) {
                           const lang = /language-(\w[\w-]*)/.exec(className ?? "")?.[1];
-                          if (lang === "nichinichi-entry") {
-                            const key = String(children).trim();
-                            return (
-                              <EntryBlock
-                                text={key}
-                                added={addedEntries.has(key)}
-                                onAdded={(k) => setAddedEntries((prev) => new Set(prev).add(k))}
-                              />
-                            );
-                          }
+                          const key = String(children).trim();
+                          const added = addedEntries.has(key);
+                          const onAdded = (k: string) => setAddedEntries((prev) => new Set(prev).add(k));
+                          if (lang === "nichinichi-entry")    return <EntryBlock    text={key} added={added} onAdded={onAdded} />;
+                          if (lang === "nichinichi-goal")     return <GoalBlock     text={key} added={added} onAdded={onAdded} orgs={availableOrgs} />;
+                          if (lang === "nichinichi-playbook") return <PlaybookBlock text={key} added={added} onAdded={onAdded} orgs={availableOrgs} />;
+                          if (lang === "nichinichi-digest")   return <DigestBlock   text={key} added={added} onAdded={onAdded} orgs={availableOrgs} />;
                           return <code className={className}>{children}</code>;
                         },
                       }}

@@ -172,12 +172,11 @@ export default function App() {
           </div>
         </div>
 
-        {/* AI panel — toggleable, resizable */}
-        {aiOpen && (
-          <div
-            className="flex-shrink-0 flex overflow-hidden relative bg-white dark:bg-gray-900"
-            style={{ width: aiWidth }}
-          >
+        {/* AI panel — toggleable, resizable; kept mounted to preserve state */}
+        <div
+          className="flex-shrink-0 flex overflow-hidden relative bg-white dark:bg-gray-900"
+          style={{ width: aiWidth, display: aiOpen ? undefined : "none" }}
+        >
             {/* Drag handle */}
             <div
               className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 hover:bg-amber-400/40 transition-colors"
@@ -198,6 +197,7 @@ export default function App() {
               messages={ai.messages}
               streaming={ai.streaming}
               activeOrg={activeOrg}
+              availableOrgs={orgs}
               onAsk={(q, model) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg, model)}
               onClear={ai.clear}
               onClose={() => setAiOpen(false)}
@@ -205,7 +205,6 @@ export default function App() {
             />
             </div>
           </div>
-        )}
       </main>
     </div>
   );

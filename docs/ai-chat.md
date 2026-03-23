@@ -119,20 +119,85 @@ We decided to use Postgres over MySQL for the new service. Log that as a decisio
 
 ### Entry cards
 
-Each suggested entry appears as an amber card showing the entry body text. Cards behave as follows:
-
-- **Add to journal** — logs the entry with the current timestamp and disables the button permanently
-- **Added ✓** — the button turns green and is disabled; the entry has been written to today's file
-- If the add fails, a red error message appears next to the button
-
-You can add some entries and skip others — each card is independent.
+Each suggested entry appears as an amber card. Review the body text, then click **Add to journal** to log it. The button turns green and is permanently disabled after saving — one click per entry. Each card is independent; you can add some and skip others.
 
 ### Tips
 
-- You can ask for entries in bulk: _"Create entries for everything I described in this conversation"_
+- Ask for entries in bulk: _"Create entries for everything I described in this conversation"_
 - The AI will not invent org or type tags unless you specify them or they are clear from context
-- The timestamp is always the current time when you click **Add to journal**, not the time mentioned in the conversation
-- Entries are added to `~/nichinichi/YYYY-MM-DD.md` (today's file) and indexed into SQLite immediately
+- The timestamp is always the current time when you click **Add to journal**
+- Entries are written to `~/nichinichi/YYYY-MM-DD.md` (today's file) and indexed immediately
+
+---
+
+## Creating goals from chat
+
+```
+Create a goal to become a staff engineer with 3 steps @acme
+Add a learning goal for mastering distributed systems
+```
+
+The AI responds with an **indigo goal card** pre-filled with:
+- **Title** (required) — editable text input
+- **Type** — `career` or `learning` select
+- **Org** — dropdown from your existing workspaces
+- **Horizon** — optional target date or milestone
+- **Why** — optional motivation text
+- **Steps** — editable list; add or remove steps before saving
+
+Click **Add goal** to write the file to `goals/active/{slug}.md` and sync to SQLite. The goal immediately appears in the Goals view.
+
+---
+
+## Creating playbooks from chat
+
+```
+Create a playbook for debugging Node.js memory leaks
+Write a runbook for deploying to Kubernetes @acme
+```
+
+The AI responds with a **violet playbook card** pre-filled with:
+- **Title** (required) — editable text input
+- **Tags** — comma-separated, editable
+- **Org** — dropdown from your existing workspaces
+- **Content** — resizable textarea with the numbered steps body
+
+Click **Add playbook** to write the file to `playbooks/{slug}.md`. The playbook immediately appears in the Playbooks view.
+
+---
+
+## Generating reports from chat
+
+```
+Generate a weekly report for this week @acme
+Summarise my work this month
+Create a quarterly review for Q1 2026
+```
+
+The AI responds with a **teal report card** pre-filled with:
+- **Type** — `weekly`, `monthly`, or `review` select
+- **Org** — dropdown from your existing workspaces
+- **Period start / end** — editable date fields (`YYYY-MM-DD`)
+- **Content** — resizable textarea with the AI-generated report body
+
+Review and edit the content before saving. Click **Save report** to write the file to `digests/{period_end}-{type}.md`. The report immediately appears in the Reports view.
+
+> **Note:** Report content is based on whatever journal entries FTS5 returns for your query. For a richer report, follow up with specific time ranges or topics in the conversation before saving.
+
+---
+
+## Card behaviour (all types)
+
+| State | Appearance |
+|---|---|
+| Default | Coloured card with editable fields and **Add** / **Save** button |
+| Loading | Button dimmed, label shows "Adding…" / "Saving…" |
+| Success | Button turns green, label shows "Added ✓" / "Saved ✓", fields disabled |
+| Error | Red error message appears next to the button |
+
+The **org field** in every card is a dropdown populated from your existing workspaces (Settings → Tags & Workspaces) and orgs discovered from your journal entries.
+
+Card state persists for the lifetime of the panel session — closing and reopening the AI panel resets it, but switching conversations does not.
 
 ---
 

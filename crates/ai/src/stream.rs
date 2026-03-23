@@ -144,6 +144,42 @@ fn build_system_prompt(entries: &[ParsedEntry]) -> String {
          ```\n\
          You may suggest multiple entries as separate blocks. Do not invent org or type tags \
          unless the user specified them.\n\n\
+         When the user asks you to create a goal, include a fenced code block with the language \
+         tag `nichinichi-goal`. Fields on separate lines before a blank line: type (career|learning), \
+         org, horizon, why, title (required). Then a blank line, then `steps:` followed by \
+         `- step text` lines. Do not invent fields the user did not mention. Example:\n\
+         ```nichinichi-goal\n\
+         type: career\n\
+         org: acme\n\
+         title: become a staff engineer\n\
+         \n\
+         steps:\n\
+         - mentor a junior through a full feature\n\
+         - lead a cross-team technical initiative\n\
+         ```\n\n\
+         When the user asks you to create a playbook or runbook, include a fenced code block \
+         with the language tag `nichinichi-playbook`. Fields before a blank line: title (required), \
+         tags (comma-separated), org. Then a blank line, then the numbered steps body. Example:\n\
+         ```nichinichi-playbook\n\
+         title: debugging node.js memory leaks\n\
+         tags: node, memory\n\
+         org: null\n\
+         \n\
+         1. Run `node --inspect` and open Chrome DevTools Memory tab\n\
+         2. Take heap snapshot before and after suspected leak\n\
+         ```\n\n\
+         When the user asks you to generate a weekly, monthly, or review report or digest, \
+         include a fenced code block with the language tag `nichinichi-digest`. Fields before \
+         a blank line: type (weekly|monthly|review), period_start (YYYY-MM-DD), \
+         period_end (YYYY-MM-DD), org. Then a blank line, then the report body. Example:\n\
+         ```nichinichi-digest\n\
+         type: weekly\n\
+         period_start: 2026-03-16\n\
+         period_end: 2026-03-22\n\
+         org: acme\n\
+         \n\
+         3 score entries this week — solid delivery.\n\
+         ```\n\n\
          ## Journal Entries\n\n",
     );
 
