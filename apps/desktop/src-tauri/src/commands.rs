@@ -1,6 +1,6 @@
 use nichinichi_ai::{list_conversations, load_conversation, save_conversation, search_entries, AiClient};
 use nichinichi_sync::{rebuild_from_disk, sync_incremental, LocalSqlite, SyncTarget};
-use nichinichi_types::{ChatMessage, Config, Goal, OrgScope, ParsedEntry, Playbook};
+use nichinichi_types::{ChatMessage, Config, Digest, Goal, OrgScope, ParsedEntry, Playbook};
 use serde::Serialize;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
@@ -1442,6 +1442,160 @@ pub async fn delete_playbook(
     let _ = app.emit("sync-update", ());
 
     Ok(())
+}
+
+// ── AI creation helpers ─────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn create_goal_from_ai(
+    app: tauri::AppHandle,
+    title: String,
+    goal_type: String,
+    org: Option<String>,
+    horizon: Option<String>,
+    why: Option<String>,
+    steps: Vec<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Goal, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    let slug: String = title
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let slug = if slug.is_empty() { "untitled".to_string() } else { slug };
+
+    let active_dir = config.repo.join("goals").join("active");
+    std::fs::create_dir_all(&active_dir).map_err(|e| e.to_string())?;
+
+    let mut file_path = active_dir.join(format!("{slug}.md"));
+    let mut counter = 1u32;
+    while file_path.exists() {
+        file_path = active_dir.join(format!("{slug}-{counter}.md"));
+        counter += 1;
+    }
+
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let org_val = org.as_deref().unwrap_or("null");
+    let horizon_val = horizon.as_deref().unwrap_or("null");
+    let why_val = why.as_deref().unwrap_or("");
+    let steps_md = steps.iter().map(|s| format!("- [ ] {s}")).collect::<Vec<_>>().join("\n");
+
+    let content = format!(
+        "---\ntype: {goal_type}\norg: {org_val}\nhorizon: {horizon_val}\nstatus: active\nwhy: {why_val}\ncreated: {today}\n---\n\n# {title}\n\n## steps\n\n{steps_md}\n\n## progress\n\n"
+    );
+
+    std::fs::write(&file_path, &content).map_err(|e| e.to_string())?;
+
+    let path_str = file_path.to_string_lossy().to_string();
+    let goal = nichinichi_parser::goal::parse_goal_file(&content, &path_str)
+        .map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_goal(&goal).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(goal)
+}
+
+#[tauri::command]
+pub async fn create_playbook_from_ai(
+    app: tauri::AppHandle,
+    title: String,
+    tags: Vec<String>,
+    org: Option<String>,
+    content: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Playbook, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    let slug: String = title
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    let slug = if slug.is_empty() { "untitled".to_string() } else { slug };
+
+    let pb_dir = config.repo.join("playbooks");
+    std::fs::create_dir_all(&pb_dir).map_err(|e| e.to_string())?;
+
+    let mut file_path = pb_dir.join(format!("{slug}.md"));
+    let mut counter = 1u32;
+    while file_path.exists() {
+        file_path = pb_dir.join(format!("{slug}-{counter}.md"));
+        counter += 1;
+    }
+
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let org_val = org.as_deref().unwrap_or("null");
+    let tags_str = tags.join(", ");
+
+    let file_content = format!(
+        "---\ntitle: {title}\ntags: [{tags_str}]\nforked_from: null\norg: {org_val}\ncreated: {today}\n---\n\n## steps\n\n{content}\n"
+    );
+
+    std::fs::write(&file_path, &file_content).map_err(|e| e.to_string())?;
+
+    let path_str = file_path.to_string_lossy().to_string();
+    let pb = nichinichi_parser::playbook::parse_playbook_file(&file_content, &path_str)
+        .map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_playbook(&pb).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(pb)
+}
+
+#[tauri::command]
+pub async fn save_digest_from_ai(
+    app: tauri::AppHandle,
+    digest_type: String,
+    period_start: String,
+    period_end: String,
+    org: Option<String>,
+    content: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Digest, String> {
+    let state = state.lock().await;
+    let config = &state.config;
+
+    let digests_dir = config.repo.join("digests");
+    std::fs::create_dir_all(&digests_dir).map_err(|e| e.to_string())?;
+
+    let mut file_path = digests_dir.join(format!("{period_end}-{digest_type}.md"));
+    let mut counter = 1u32;
+    while file_path.exists() {
+        file_path = digests_dir.join(format!("{period_end}-{digest_type}-{counter}.md"));
+        counter += 1;
+    }
+
+    let generated = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+    let org_val = org.as_deref().unwrap_or("null");
+
+    let file_content = format!(
+        "---\ntype: {digest_type}\nperiod_start: {period_start}\nperiod_end: {period_end}\nentries: 0\norg: {org_val}\ngenerated: {generated}\n---\n\n{content}\n"
+    );
+
+    std::fs::write(&file_path, &file_content).map_err(|e| e.to_string())?;
+
+    let path_str = file_path.to_string_lossy().to_string();
+    let digest = nichinichi_parser::digest::parse_digest_file(&file_content, &path_str)
+        .map_err(|e| e.to_string())?;
+    let target = LocalSqlite::new(state.pool.clone());
+    target.upsert_digest(&digest).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+
+    Ok(digest)
 }
 
 // ── Orgs ───────────────────────────────────────────────────────────────────
