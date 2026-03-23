@@ -282,7 +282,10 @@ function DigestBlock({ text, added, onAdded, orgs }: { text: string; added: bool
             <option value="monthly">monthly</option>
             <option value="review">review</option>
           </select>
-          <input value={org} onChange={(e) => setOrg(e.target.value)} placeholder="@org" disabled={added} className={`${inputCls} w-28`} />
+          <select value={org} onChange={(e) => setOrg(e.target.value)} disabled={added} className={`${inputCls} w-28`}>
+            <option value="">no org</option>
+            {orgs.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
         </div>
         <div className="flex gap-1.5">
           <input value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} placeholder="period_start (YYYY-MM-DD)" disabled={added} className={inputCls} />
