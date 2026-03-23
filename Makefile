@@ -1,4 +1,4 @@
-.PHONY: help install dev build build-desktop test test-parser test-sync cli
+.PHONY: help install dev build build-desktop build-cli test test-parser test-sync cli
 
 .DEFAULT_GOAL := help
 
@@ -26,6 +26,13 @@ build: ## Build all Rust crates
 
 build-desktop: ## Build production desktop installer (output: target/release/bundle/)
 	cd apps/desktop && pnpm tauri build
+
+build-cli: ## Build CLI binary for local installation (output: target/release/nichinichi)
+	cargo build -p nichinichi-cli --release
+
+clean-build:
+	@echo "Cleaning the Rust build cache"
+	@cargo clean --manifest-path ./apps/desktop/src-tauri/Cargo.toml
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 
