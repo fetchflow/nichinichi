@@ -11,7 +11,7 @@ Log daily work from the CLI or desktop app. All data lives as plain markdown fil
 - **CLI + desktop app** — log entries from the terminal or a native GUI
 - **Plain markdown** — all data is human-readable files you own
 - **Full-text search** — SQLite FTS5 index across all your entries
-- **AI chat panel** — ask questions about your work history; ask the AI to create journal entries and add them with one click; responses stream with full markdown rendering; conversations auto-saved, browsable, and resumable
+- **AI chat panel** — ask questions about your work history; ask the AI to create journal entries, goals, playbooks, or reports and save them with one click; pre-filled editable cards with workspace dropdown; conversations auto-saved, browsable, and resumable
 - **Goals tracking** — step-by-step goal files with progress signals; steps and progress are editable in the desktop UI with write-back to markdown; progress entries can reference specific log entries via `refs:`
 - **Playbooks** — reusable runbooks stored as markdown; create, edit (split editor with live preview), and delete from the desktop UI
 - **Composer chip toolbar** — clickable chips for entry types (`#score`, `#solution`, etc.), custom tags, and workspaces (`@acme`) below the log input; clicking inserts the token at cursor
@@ -120,18 +120,19 @@ summarise my decisions this week @acme
 what patterns do I keep repeating?
 ```
 
-**Creating entries from chat:**
+**Creating objects from chat:**
 ```
 Log that I fixed the auth middleware bug @acme
-Create 3 entries for today: fixed a bug, reviewed a PR, joined standup @acme
-Add a #solution entry for solving the memory leak in the worker process
+Create a goal to become a staff engineer with 3 steps @acme
+Create a playbook for debugging Node.js memory leaks
+Generate a weekly report for this week @acme
 ```
 
-The AI responds with an amber entry card for each suggested entry. Click **Add to journal** to log it instantly. The button turns green and stays disabled — one click per entry, no duplicates.
+The AI responds with an interactive card for each suggestion. Review and edit the pre-filled fields, then click **Add** to save. The button turns green and stays disabled after saving — one click per card, no duplicates. The org field is a dropdown populated from your existing workspaces.
 
 **Other highlights:**
 - Responses stream in with full markdown rendering
-- Conversations are auto-saved to `~/nichinichi/ai/` after each response
+- Conversations are auto-saved to `~/nichinichi/ai/` after each response and appear in history immediately
 - Browse, resume, rename, archive, or delete past conversations via the clock icon
 - Multi-turn context — follow-up questions reference earlier turns
 
