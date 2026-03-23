@@ -41,6 +41,7 @@ export default function App() {
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiWidth, setAiWidth] = useState(AI_PANEL_DEFAULT);
+  const [aiLayout, setAiLayout] = useState<"panel" | "half" | "full">("panel");
   const isResizing = useRef(false);
   const { theme, setTheme } = useTheme();
   const { activeOrg, setActiveOrg, orgs, workspaces, setWorkspaces } = useOrg();
@@ -123,8 +124,8 @@ export default function App() {
       </aside>
 
       {/* Main content */}
-      <main className="flex flex-1 min-w-0 overflow-hidden">
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      <main className="flex flex-1 min-w-0 overflow-hidden relative">
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden" style={{ display: aiOpen && aiLayout === "full" ? "none" : undefined }}>
           {/* Top bar */}
           <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
@@ -184,52 +185,66 @@ export default function App() {
               <PlaybooksView activeOrg={activeOrg} />
             )}
             {section === "reports" && <ReportsView activeOrg={activeOrg} />}
-            {section === "settings" && (
-              <SettingsView
-                theme={theme}
-                onThemeChange={setTheme}
-                syncNow={sync.syncNow}
-                syncing={sync.syncing}
-                workspaces={workspaces}
-                onWorkspacesChange={setWorkspaces}
-              />
-            )}
           </div>
         </div>
 
         {/* AI panel — toggleable, resizable; kept mounted to preserve state */}
         <div
           className="flex-shrink-0 flex overflow-hidden relative bg-white dark:bg-gray-900"
-          style={{ width: aiWidth, display: aiOpen ? undefined : "none" }}
+          style={{
+            display: aiOpen ? undefined : "none",
+            width: !aiOpen ? aiWidth
+              : aiLayout === "full" ? "100%"
+              : aiLayout === "half" ? "50%"
+              : aiWidth,
+          }}
         >
-            {/* Drag handle */}
-            <div
-              className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 hover:bg-amber-400/40 transition-colors"
-              onPointerDown={(e) => {
-                e.preventDefault();
-                isResizing.current = true;
-                (e.target as HTMLElement).setPointerCapture(e.pointerId);
-              }}
-              onPointerMove={(e) => {
-                if (!isResizing.current) return;
-                const newWidth = window.innerWidth - e.clientX;
-                setAiWidth(Math.min(AI_PANEL_MAX, Math.max(AI_PANEL_MIN, newWidth)));
-              }}
-              onPointerUp={() => { isResizing.current = false; }}
-            />
+            {/* Drag handle — hidden in snap modes */}
+            {aiLayout === "panel" && (
+              <div
+                className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 hover:bg-amber-400/40 transition-colors"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  isResizing.current = true;
+                  (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (!isResizing.current) return;
+                  const newWidth = window.innerWidth - e.clientX;
+                  setAiWidth(Math.min(AI_PANEL_MAX, Math.max(AI_PANEL_MIN, newWidth)));
+                }}
+                onPointerUp={() => { isResizing.current = false; }}
+              />
+            )}
             <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
             <AskPanel
               messages={ai.messages}
               streaming={ai.streaming}
               activeOrg={activeOrg}
               availableOrgs={orgs}
+              layout={aiLayout}
               onAsk={(q, model) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg, model)}
               onClear={ai.clear}
-              onClose={() => setAiOpen(false)}
+              onClose={() => { setAiOpen(false); setAiLayout("panel"); }}
               onLoad={ai.loadConversation}
+              onLayoutChange={setAiLayout}
             />
             </div>
           </div>
+
+        {/* Settings overlay — floats over the full main area including AI panel */}
+        {section === "settings" && (
+          <div className="absolute inset-0 z-20 bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
+            <SettingsView
+              theme={theme}
+              onThemeChange={setTheme}
+              syncNow={sync.syncNow}
+              syncing={sync.syncing}
+              workspaces={workspaces}
+              onWorkspacesChange={setWorkspaces}
+            />
+          </div>
+        )}
       </main>
     </div>
   );
