@@ -72,36 +72,33 @@ function GoalBlock({ text, added, onAdded }: { text: string; added: boolean; onA
   const [error, setError] = useState(false);
 
   const { meta, body } = parseBlockMeta(text);
-  const title = meta["title"] ?? "";
-  const goalType = meta["type"] ?? "career";
-  const org = meta["org"] && meta["org"] !== "null" ? meta["org"] : undefined;
-  const horizon = meta["horizon"] && meta["horizon"] !== "null" ? meta["horizon"] : undefined;
-  const why = meta["why"] && meta["why"] !== "null" ? meta["why"] : undefined;
-  const steps = body
-    .split("\n")
-    .filter((l) => l.startsWith("- ") && !l.startsWith("- [ ]") && !l.startsWith("- [x]") || l.match(/^-\s/))
-    .map((l) => l.replace(/^-\s+/, "").trim())
-    .filter(Boolean);
-  // also parse after "steps:" header
   const stepsBody = body.includes("steps:") ? body.split("steps:").slice(1).join("steps:") : body;
-  const parsedSteps = stepsBody
+  const initialSteps = stepsBody
     .split("\n")
     .filter((l) => l.trim().startsWith("- "))
     .map((l) => l.trim().replace(/^-\s+/, "").trim())
     .filter(Boolean);
-  const finalSteps = parsedSteps.length > 0 ? parsedSteps : steps;
+
+  const [title, setTitle] = useState(meta["title"] ?? "");
+  const [goalType, setGoalType] = useState(meta["type"] ?? "career");
+  const [org, setOrg] = useState(meta["org"] && meta["org"] !== "null" ? meta["org"] : "");
+  const [horizon, setHorizon] = useState(meta["horizon"] && meta["horizon"] !== "null" ? meta["horizon"] : "");
+  const [why, setWhy] = useState(meta["why"] && meta["why"] !== "null" ? meta["why"] : "");
+  const [steps, setSteps] = useState<string[]>(initialSteps.length > 0 ? initialSteps : [""]);
+
+  const inputCls = "w-full text-xs px-2 py-1 rounded border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-400";
 
   const handleAdd = async () => {
-    if (added || loading || !title) return;
+    if (added || loading || !title.trim()) return;
     setLoading(true);
     try {
       await invoke("create_goal_from_ai", {
-        title,
+        title: title.trim(),
         goalType,
-        org: org ?? null,
-        horizon: horizon ?? null,
-        why: why ?? null,
-        steps: finalSteps,
+        org: org.trim() || null,
+        horizon: horizon.trim() || null,
+        why: why.trim() || null,
+        steps: steps.map((s) => s.trim()).filter(Boolean),
       });
       onAdded(text.trim());
     } catch {
@@ -113,37 +110,48 @@ function GoalBlock({ text, added, onAdded }: { text: string; added: boolean; onA
 
   return (
     <div className="my-2 rounded-lg border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/10 overflow-hidden">
-      <div className="px-3 py-2">
-        <div className="flex items-center gap-2 flex-wrap mb-1">
-          <span className="text-xs font-bold text-indigo-900 dark:text-indigo-100">{title || "Goal"}</span>
-          <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">{goalType}</span>
-          {org && <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300">@{org}</span>}
-          {horizon && <span className="text-xs text-indigo-500 dark:text-indigo-400">{horizon}</span>}
+      <div className="px-3 pt-2 pb-1 text-xs font-semibold text-indigo-500 dark:text-indigo-400 uppercase tracking-wide">Goal</div>
+      <div className="px-3 pb-2 space-y-1.5">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" disabled={added} className={inputCls} />
+        <div className="flex gap-1.5">
+          <select value={goalType} onChange={(e) => setGoalType(e.target.value)} disabled={added} className={`${inputCls} w-auto`}>
+            <option value="career">career</option>
+            <option value="learning">learning</option>
+          </select>
+          <input value={org} onChange={(e) => setOrg(e.target.value)} placeholder="@org" disabled={added} className={inputCls} />
+          <input value={horizon} onChange={(e) => setHorizon(e.target.value)} placeholder="horizon" disabled={added} className={inputCls} />
         </div>
-        {why && <p className="text-xs italic text-indigo-600 dark:text-indigo-400 mb-1">{why}</p>}
-        {finalSteps.length > 0 && (
-          <ul className="mt-1 space-y-0.5">
-            {finalSteps.map((s, i) => (
-              <li key={i} className="text-xs text-indigo-700 dark:text-indigo-300 flex gap-1.5">
-                <span className="opacity-50">☐</span><span>{s}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="Why (motivation)" disabled={added} className={inputCls} />
+        <div className="space-y-1">
+          <div className="text-xs text-indigo-500 dark:text-indigo-400">Steps</div>
+          {steps.map((s, i) => (
+            <div key={i} className="flex gap-1">
+              <input
+                value={s}
+                onChange={(e) => setSteps(steps.map((v, j) => j === i ? e.target.value : v))}
+                placeholder={`Step ${i + 1}`}
+                disabled={added}
+                className={inputCls}
+              />
+              {!added && steps.length > 1 && (
+                <button onClick={() => setSteps(steps.filter((_, j) => j !== i))} className="text-xs text-indigo-400 hover:text-indigo-600 px-1">✕</button>
+              )}
+            </div>
+          ))}
+          {!added && (
+            <button onClick={() => setSteps([...steps, ""])} className="text-xs text-indigo-500 hover:text-indigo-700 dark:text-indigo-400">+ Add step</button>
+          )}
+        </div>
       </div>
       <div className="px-3 py-2 border-t border-indigo-200 dark:border-indigo-800/50 flex items-center gap-2">
         <button
           onClick={handleAdd}
-          disabled={added || loading || !title}
+          disabled={added || loading || !title.trim()}
           className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
-            ${added
-              ? "bg-green-500 opacity-50 cursor-not-allowed"
-              : loading
-              ? "bg-indigo-400 opacity-50 cursor-not-allowed"
-              : !title
-              ? "bg-indigo-300 cursor-not-allowed"
-              : "bg-indigo-500 hover:bg-indigo-600 cursor-pointer"
-            }`}
+            ${added ? "bg-green-500 opacity-50 cursor-not-allowed"
+              : loading ? "bg-indigo-400 opacity-50 cursor-not-allowed"
+              : !title.trim() ? "bg-indigo-300 cursor-not-allowed"
+              : "bg-indigo-500 hover:bg-indigo-600 cursor-pointer"}`}
         >
           {added ? "Added ✓" : loading ? "Adding…" : "Add goal"}
         </button>
@@ -160,20 +168,23 @@ function PlaybookBlock({ text, added, onAdded }: { text: string; added: boolean;
   const [error, setError] = useState(false);
 
   const { meta, body } = parseBlockMeta(text);
-  const title = meta["title"] ?? "";
-  const tags = (meta["tags"] ?? "").split(",").map((t) => t.trim()).filter(Boolean);
-  const org = meta["org"] && meta["org"] !== "null" ? meta["org"] : undefined;
-  const previewLines = body.split("\n").slice(0, 3).join("\n");
+
+  const [title, setTitle] = useState(meta["title"] ?? "");
+  const [tagsInput, setTagsInput] = useState((meta["tags"] ?? "").split(",").map((t) => t.trim()).filter(Boolean).join(", "));
+  const [org, setOrg] = useState(meta["org"] && meta["org"] !== "null" ? meta["org"] : "");
+  const [content, setContent] = useState(body);
+
+  const inputCls = "w-full text-xs px-2 py-1 rounded border border-violet-200 dark:border-violet-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-violet-400";
 
   const handleAdd = async () => {
-    if (added || loading || !title) return;
+    if (added || loading || !title.trim()) return;
     setLoading(true);
     try {
       await invoke("create_playbook_from_ai", {
-        title,
-        tags,
-        org: org ?? null,
-        content: body,
+        title: title.trim(),
+        tags: tagsInput.split(",").map((t) => t.trim()).filter(Boolean),
+        org: org.trim() || null,
+        content: content.trim(),
       });
       onAdded(text.trim());
     } catch {
@@ -185,31 +196,31 @@ function PlaybookBlock({ text, added, onAdded }: { text: string; added: boolean;
 
   return (
     <div className="my-2 rounded-lg border border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-900/10 overflow-hidden">
-      <div className="px-3 py-2">
-        <div className="flex items-center gap-2 flex-wrap mb-1">
-          <span className="text-xs font-bold text-violet-900 dark:text-violet-100">{title || "Playbook"}</span>
-          {tags.map((t) => (
-            <span key={t} className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-800/40 text-violet-700 dark:text-violet-300">{t}</span>
-          ))}
-          {org && <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-800/40 text-violet-700 dark:text-violet-300">@{org}</span>}
+      <div className="px-3 pt-2 pb-1 text-xs font-semibold text-violet-500 dark:text-violet-400 uppercase tracking-wide">Playbook</div>
+      <div className="px-3 pb-2 space-y-1.5">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" disabled={added} className={inputCls} />
+        <div className="flex gap-1.5">
+          <input value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="tags, comma-separated" disabled={added} className={inputCls} />
+          <input value={org} onChange={(e) => setOrg(e.target.value)} placeholder="@org" disabled={added} className={`${inputCls} w-28`} />
         </div>
-        {previewLines && (
-          <p className="text-xs font-mono text-violet-700 dark:text-violet-300 whitespace-pre-wrap line-clamp-3">{previewLines}</p>
-        )}
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={5}
+          disabled={added}
+          placeholder="Steps / content"
+          className={`${inputCls} font-mono resize-y`}
+        />
       </div>
       <div className="px-3 py-2 border-t border-violet-200 dark:border-violet-800/50 flex items-center gap-2">
         <button
           onClick={handleAdd}
-          disabled={added || loading || !title}
+          disabled={added || loading || !title.trim()}
           className={`text-xs px-2.5 py-1 rounded text-white font-medium transition-colors
-            ${added
-              ? "bg-green-500 opacity-50 cursor-not-allowed"
-              : loading
-              ? "bg-violet-400 opacity-50 cursor-not-allowed"
-              : !title
-              ? "bg-violet-300 cursor-not-allowed"
-              : "bg-violet-500 hover:bg-violet-600 cursor-pointer"
-            }`}
+            ${added ? "bg-green-500 opacity-50 cursor-not-allowed"
+              : loading ? "bg-violet-400 opacity-50 cursor-not-allowed"
+              : !title.trim() ? "bg-violet-300 cursor-not-allowed"
+              : "bg-violet-500 hover:bg-violet-600 cursor-pointer"}`}
         >
           {added ? "Added ✓" : loading ? "Adding…" : "Add playbook"}
         </button>
@@ -226,11 +237,14 @@ function DigestBlock({ text, added, onAdded }: { text: string; added: boolean; o
   const [error, setError] = useState(false);
 
   const { meta, body } = parseBlockMeta(text);
-  const digestType = meta["type"] ?? "weekly";
-  const periodStart = meta["period_start"] ?? "";
-  const periodEnd = meta["period_end"] ?? "";
-  const org = meta["org"] && meta["org"] !== "null" ? meta["org"] : undefined;
-  const previewLines = body.split("\n").slice(0, 2).join(" ").slice(0, 120);
+
+  const [digestType, setDigestType] = useState(meta["type"] ?? "weekly");
+  const [periodStart, setPeriodStart] = useState(meta["period_start"] ?? "");
+  const [periodEnd, setPeriodEnd] = useState(meta["period_end"] ?? "");
+  const [org, setOrg] = useState(meta["org"] && meta["org"] !== "null" ? meta["org"] : "");
+  const [content, setContent] = useState(body);
+
+  const inputCls = "w-full text-xs px-2 py-1 rounded border border-teal-200 dark:border-teal-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-teal-400";
 
   const handleAdd = async () => {
     if (added || loading) return;
@@ -238,10 +252,10 @@ function DigestBlock({ text, added, onAdded }: { text: string; added: boolean; o
     try {
       await invoke("save_digest_from_ai", {
         digestType,
-        periodStart,
-        periodEnd,
-        org: org ?? null,
-        content: body,
+        periodStart: periodStart.trim(),
+        periodEnd: periodEnd.trim(),
+        org: org.trim() || null,
+        content: content.trim(),
       });
       onAdded(text.trim());
     } catch {
@@ -253,17 +267,28 @@ function DigestBlock({ text, added, onAdded }: { text: string; added: boolean; o
 
   return (
     <div className="my-2 rounded-lg border border-teal-200 dark:border-teal-800/50 bg-teal-50 dark:bg-teal-900/10 overflow-hidden">
-      <div className="px-3 py-2">
-        <div className="flex items-center gap-2 flex-wrap mb-1">
-          <span className="text-xs font-bold text-teal-900 dark:text-teal-100 capitalize">{digestType} report</span>
-          {(periodStart || periodEnd) && (
-            <span className="text-xs text-teal-600 dark:text-teal-400">{periodStart} → {periodEnd}</span>
-          )}
-          {org && <span className="text-xs px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-800/40 text-teal-700 dark:text-teal-300">@{org}</span>}
+      <div className="px-3 pt-2 pb-1 text-xs font-semibold text-teal-500 dark:text-teal-400 uppercase tracking-wide">Report</div>
+      <div className="px-3 pb-2 space-y-1.5">
+        <div className="flex gap-1.5">
+          <select value={digestType} onChange={(e) => setDigestType(e.target.value)} disabled={added} className={`${inputCls} w-auto`}>
+            <option value="weekly">weekly</option>
+            <option value="monthly">monthly</option>
+            <option value="review">review</option>
+          </select>
+          <input value={org} onChange={(e) => setOrg(e.target.value)} placeholder="@org" disabled={added} className={`${inputCls} w-28`} />
         </div>
-        {previewLines && (
-          <p className="text-xs text-teal-700 dark:text-teal-300 line-clamp-2">{previewLines}</p>
-        )}
+        <div className="flex gap-1.5">
+          <input value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} placeholder="period_start (YYYY-MM-DD)" disabled={added} className={inputCls} />
+          <input value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} placeholder="period_end (YYYY-MM-DD)" disabled={added} className={inputCls} />
+        </div>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={5}
+          disabled={added}
+          placeholder="Report content"
+          className={`${inputCls} resize-y`}
+        />
       </div>
       <div className="px-3 py-2 border-t border-teal-200 dark:border-teal-800/50 flex items-center gap-2">
         <button
