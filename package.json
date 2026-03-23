@@ -1,8 +1,5 @@
 {
   "name": "nichinichi-workspace",
   "private": true,
-  "packageManager": "pnpm@9.0.0",
-  "workspaces": [
-    "apps/desktop"
-  ]
+  "packageManager": "pnpm@9.0.0"
 }
