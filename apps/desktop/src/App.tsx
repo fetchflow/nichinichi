@@ -60,7 +60,7 @@ export default function App() {
       {/* Sidebar nav */}
       <aside
         className="flex-shrink-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col transition-all duration-200"
-        style={{ width: navCollapsed ? 52 : 192, display: aiOpen && aiLayout === "full" ? "none" : undefined }}
+        style={{ width: navCollapsed ? 52 : 192 }}
       >
         {/* Logo + collapse toggle */}
         <div className="flex items-center justify-between px-3 py-4 border-b border-gray-200 dark:border-gray-800 min-h-[53px]">
@@ -124,7 +124,7 @@ export default function App() {
       </aside>
 
       {/* Main content */}
-      <main className="flex flex-1 min-w-0 overflow-hidden">
+      <main className="flex flex-1 min-w-0 overflow-hidden relative">
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden" style={{ display: aiOpen && aiLayout === "full" ? "none" : undefined }}>
           {/* Top bar */}
           <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
@@ -185,16 +185,6 @@ export default function App() {
               <PlaybooksView activeOrg={activeOrg} />
             )}
             {section === "reports" && <ReportsView activeOrg={activeOrg} />}
-            {section === "settings" && (
-              <SettingsView
-                theme={theme}
-                onThemeChange={setTheme}
-                syncNow={sync.syncNow}
-                syncing={sync.syncing}
-                workspaces={workspaces}
-                onWorkspacesChange={setWorkspaces}
-              />
-            )}
           </div>
         </div>
 
@@ -241,6 +231,20 @@ export default function App() {
             />
             </div>
           </div>
+
+        {/* Settings overlay — floats over the full main area including AI panel */}
+        {section === "settings" && (
+          <div className="absolute inset-0 z-20 bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
+            <SettingsView
+              theme={theme}
+              onThemeChange={setTheme}
+              syncNow={sync.syncNow}
+              syncing={sync.syncing}
+              workspaces={workspaces}
+              onWorkspacesChange={setWorkspaces}
+            />
+          </div>
+        )}
       </main>
     </div>
   );
