@@ -1710,9 +1710,8 @@ fn remove_entry_block(content: &str, raw_line: &str) -> String {
         }
         out.push_str("\n---\n");
         out.push_str(trimmed);
-        out.push_str("\n---");
+        out.push_str("\n---\n");
     }
-    out.push('\n');
     out
 }
 
@@ -1747,9 +1746,8 @@ fn replace_entry_block(
         } else {
             out.push_str(trimmed);
         }
-        out.push_str("\n---");
+        out.push_str("\n---\n");
     }
-    out.push('\n');
     out
 }
 

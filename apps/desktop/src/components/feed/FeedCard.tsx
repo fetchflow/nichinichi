@@ -22,12 +22,18 @@ export function FeedCard({ entry, onDelete, onEdit }: Props) {
   const label = TYPE_LABELS[entry.entry_type];
 
   const [editing, setEditing] = useState(false);
-  const [bodyDraft, setBodyDraft] = useState(entry.body);
+  const [bodyDraft, setBodyDraft] = useState("");
   const [detailDraft, setDetailDraft] = useState(entry.detail ?? "");
   const [saving, setSaving] = useState(false);
 
+  // Strip "HH:MM | " (or "~HH:MM | ") prefix from raw_line to get editable text
+  // including @org and #type tags which are parsed out of entry.body.
+  function rawBody() {
+    return entry.raw_line.replace(/^~?\d+:\d+\s*\|\s*/, "");
+  }
+
   function startEdit() {
-    setBodyDraft(entry.body);
+    setBodyDraft(rawBody());
     setDetailDraft(entry.detail ?? "");
     setEditing(true);
   }
