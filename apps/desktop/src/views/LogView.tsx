@@ -21,7 +21,7 @@ function formatDateHeader(dateStr: string): string {
 }
 
 export function LogView({ activeOrg, workspaces }: Props) {
-  const { entries, loading, addEntry } = useEntries(undefined, activeOrg);
+  const { entries, loading, addEntry, deleteEntry, editEntry } = useEntries(undefined, activeOrg);
 
   const groups = entries.reduce<{ date: string; items: Entry[] }[]>((acc, e) => {
     if (acc.length === 0 || acc[acc.length - 1].date !== e.date)
@@ -53,7 +53,14 @@ export function LogView({ activeOrg, workspaces }: Props) {
                 </span>
                 <div className="flex-1 h-px bg-gray-200 dark:bg-gray-800" />
               </div>
-              {items.map((entry) => <FeedCard key={entry.id} entry={entry} />)}
+              {items.map((entry) => (
+                <FeedCard
+                  key={entry.id}
+                  entry={entry}
+                  onDelete={deleteEntry}
+                  onEdit={editEntry}
+                />
+              ))}
             </div>
           ))
         )}
