@@ -20,4 +20,6 @@ pub enum AiError {
     Api { status: u16, body: String },
     #[error("stream parse error: {0}")]
     Parse(String),
+    #[error("request timed out after {0}s")]
+    Timeout(u64),
 }

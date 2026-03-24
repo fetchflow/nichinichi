@@ -62,6 +62,8 @@ enum Command {
         #[command(subcommand)]
         action: PlaybookAction,
     },
+    /// Interactively edit a recent journal entry
+    Edit,
 }
 
 #[derive(Subcommand)]
@@ -119,6 +121,7 @@ async fn main() -> Result<()> {
             }
             PlaybookAction::List => commands::playbooks::list(&config).await,
         },
+        Some(Command::Edit) => commands::edit::run(&config).await,
         None => {
             // No subcommand and no entry text — print help
             use clap::CommandFactory;

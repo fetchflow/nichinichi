@@ -3,6 +3,7 @@ use nichinichi_types::{AiConfig, ChatMessage, ParsedEntry};
 use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{json, Value};
+use std::time::Duration;
 
 pub struct AiClient {
     config: AiConfig,
@@ -53,7 +54,24 @@ impl AiClient {
     /// `history` is the prior conversation turns (user + assistant messages).
     /// `on_chunk` is called for each text delta as it arrives.
     /// Returns the full concatenated response text when done.
+    /// Times out after 120 seconds and returns `AiError::Timeout`.
     pub async fn ask(
+        &self,
+        user_query: &str,
+        context_entries: &[ParsedEntry],
+        history: &[ChatMessage],
+        on_chunk: impl Fn(String),
+    ) -> Result<String, AiError> {
+        const TIMEOUT_SECS: u64 = 120;
+        tokio::time::timeout(
+            Duration::from_secs(TIMEOUT_SECS),
+            self.ask_inner(user_query, context_entries, history, on_chunk),
+        )
+        .await
+        .map_err(|_| AiError::Timeout(TIMEOUT_SECS))?
+    }
+
+    async fn ask_inner(
         &self,
         user_query: &str,
         context_entries: &[ParsedEntry],

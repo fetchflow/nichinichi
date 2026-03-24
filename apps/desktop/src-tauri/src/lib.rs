@@ -31,6 +31,7 @@ pub fn run() {
             commands::get_entries,
             commands::add_entry,
             commands::delete_entry,
+            commands::edit_entry,
             commands::get_goals,
             commands::update_goal_step,
             commands::archive_goal,
