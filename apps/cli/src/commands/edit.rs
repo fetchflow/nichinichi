@@ -8,36 +8,57 @@ use nichinichi_types::Config;
 pub async fn run(config: &Config) -> Result<()> {
     let pool = open_db(&config.repo).await?;
 
-    // Fetch recent 20 entries
-    let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
-        "SELECT id, date, time, body, raw_line FROM entries ORDER BY date DESC, time DESC LIMIT 20",
+    // Step 1: pick a date
+    let dates: Vec<(String,)> = sqlx::query_as(
+        "SELECT DISTINCT date FROM entries ORDER BY date DESC LIMIT 14",
     )
     .fetch_all(&pool)
     .await?;
 
-    if rows.is_empty() {
+    if dates.is_empty() {
         println!("No entries found.");
         return Ok(());
     }
 
-    // Build display labels
-    let labels: Vec<String> = rows
+    let date_labels: Vec<&str> = dates.iter().map(|(d,)| d.as_str()).collect();
+    let date_idx = Select::new()
+        .with_prompt("Date")
+        .items(&date_labels)
+        .default(0)
+        .interact()?;
+    let chosen_date = &dates[date_idx].0;
+
+    // Step 2: pick an entry from that date
+    let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
+        "SELECT id, time, body, raw_line FROM entries WHERE date = ? ORDER BY time",
+    )
+    .bind(chosen_date)
+    .fetch_all(&pool)
+    .await?;
+
+    if rows.is_empty() {
+        println!("No entries for {chosen_date}.");
+        return Ok(());
+    }
+
+    let entry_labels: Vec<String> = rows
         .iter()
-        .map(|(_, date, time, body, _)| {
+        .map(|(_, time, body, _)| {
             let mut chars = body.chars();
-            let truncated: String = chars.by_ref().take(60).collect();
+            let truncated: String = chars.by_ref().take(50).collect();
             let suffix = if chars.next().is_some() { "…" } else { "" };
-            format!("{date} {time}  {truncated}{suffix}")
+            format!("{time}  {truncated}{suffix}")
         })
         .collect();
 
-    let selection = Select::new()
-        .with_prompt("Select entry to edit")
-        .items(&labels)
+    let entry_idx = Select::new()
+        .with_prompt("Entry")
+        .items(&entry_labels)
         .default(0)
         .interact()?;
 
-    let (id, date, time, body, raw_line) = &rows[selection];
+    let (id, time, body, raw_line) = &rows[entry_idx];
+    let date = chosen_date;
     let raw_line = raw_line
         .as_deref()
         .ok_or_else(|| anyhow!("entry has no raw_line"))?;
