@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Heatmap } from "../components/stats/Heatmap";
 import { RadialGraph } from "../components/graphs/RadialGraph";
 import { StreamGraph } from "../components/graphs/StreamGraph";
@@ -15,11 +16,18 @@ import type { ActivityPayload } from "../types";
 
 type DrillPeriod = "week" | "month" | "year";
 
-interface Props {
-  activeOrg: string;
+interface SetupStatus {
+  has_ai_config: boolean;
+  has_entries: boolean;
+  repo_path: string;
 }
 
-export function DashboardView({ activeOrg }: Props) {
+interface Props {
+  activeOrg: string;
+  onNavigateToSettings: () => void;
+}
+
+export function DashboardView({ activeOrg, onNavigateToSettings }: Props) {
   const org = activeOrg === "all" ? undefined : activeOrg;
   const { stats, loading: statsLoading } = useStats(org);
   const { goals, loading: goalsLoading } = useGoals("active", org);
@@ -30,6 +38,28 @@ export function DashboardView({ activeOrg }: Props) {
   const { entries: todayEntries, loading: entriesLoading } = useEntries(today, activeOrg);
 
   const [drill, setDrill] = useState<DrillPeriod | null>(null);
+
+  const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  useEffect(() => {
+    invoke<SetupStatus>("get_setup_status").then(setSetupStatus).catch(() => {});
+    invoke<Record<string, string>>("get_settings")
+      .then((s: Record<string, string>) => {
+        if (s["welcome_dismissed"] === "true") setBannerDismissed(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  function dismissBanner() {
+    setBannerDismissed(true);
+    invoke("set_setting", { key: "welcome_dismissed", value: "true" }).catch(() => {});
+  }
+
+  const showBanner =
+    !bannerDismissed &&
+    setupStatus !== null &&
+    (!setupStatus.has_ai_config || !setupStatus.has_entries);
 
   if (drill !== null && activity) {
     return (
@@ -43,6 +73,39 @@ export function DashboardView({ activeOrg }: Props) {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      {/* Welcome banner */}
+      {showBanner && (
+        <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3 flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+              Welcome to Nichinichi — your local-first developer journal.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {!setupStatus!.has_ai_config && (
+                <button
+                  onClick={onNavigateToSettings}
+                  className="text-xs px-2.5 py-1 rounded bg-blue-500 text-white hover:bg-blue-600"
+                >
+                  Set up AI
+                </button>
+              )}
+              {!setupStatus!.has_entries && (
+                <span className="text-xs text-blue-700 dark:text-blue-300 py-1">
+                  Log your first entry in the Log tab to get started.
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={dismissBanner}
+            className="text-blue-400 hover:text-blue-600 dark:hover:text-blue-200 shrink-0 text-lg leading-none"
+            title="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Streak + quick stats */}
       <div className="grid grid-cols-3 gap-4">
         <StatCard
@@ -208,7 +271,7 @@ function MiniGraphCard({
   sub: string;
   total: number;
   onClick: () => void;
-  children: React.ReactNode;
+  children: unknown;
 }) {
   const [hov, setHov] = useState(false);
   return (
