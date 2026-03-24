@@ -115,12 +115,75 @@ pub async fn add_entry(
 
 #[tauri::command]
 pub async fn delete_entry(
+    app: tauri::AppHandle,
     id: String,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
     let state = state.lock().await;
+
+    // Remove from markdown file first
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT date, raw_line FROM entries WHERE id = ?")
+            .bind(&id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    if let Some((date, raw_line)) = row {
+        if let Some(file_path) = find_entry_file(&state.config, &date) {
+            let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+            let updated = remove_entry_block(&content, &raw_line);
+            std::fs::write(&file_path, &updated).map_err(|e| e.to_string())?;
+        }
+    }
+
     let target = LocalSqlite::new(state.pool.clone());
-    target.delete_entry(&id).await.map_err(|e| e.to_string())
+    target.delete_entry(&id).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn edit_entry(
+    app: tauri::AppHandle,
+    id: String,
+    new_body: String,
+    new_detail: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<ParsedEntry, String> {
+    let state = state.lock().await;
+
+    let row: Option<(String, String, String)> =
+        sqlx::query_as("SELECT date, time, raw_line FROM entries WHERE id = ?")
+            .bind(&id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    let (date, time, old_raw_line) = row.ok_or_else(|| format!("entry '{id}' not found"))?;
+    let new_raw_line = format!("{time} | {new_body}");
+
+    let file_path = find_entry_file(&state.config, &date)
+        .ok_or_else(|| format!("file not found for date '{date}'"))?;
+
+    let content = std::fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let updated = replace_entry_block(&content, &old_raw_line, &new_raw_line, new_detail.as_deref());
+    std::fs::write(&file_path, &updated).map_err(|e| e.to_string())?;
+
+    let default_org = state.config.effective_org();
+    let entries = nichinichi_parser::entry::parse_entry_file(&updated, &date, default_org)
+        .map_err(|e| e.to_string())?;
+
+    let new_entry = entries
+        .into_iter()
+        .find(|e| e.raw_line == new_raw_line)
+        .ok_or_else(|| "failed to locate updated entry after re-parse".to_string())?;
+
+    let target = LocalSqlite::new(state.pool.clone());
+    target.delete_entry(&id).await.map_err(|e| e.to_string())?;
+    target.upsert_entry(&new_entry).await.map_err(|e| e.to_string())?;
+    let _ = app.emit("sync-update", ());
+    Ok(new_entry)
 }
 
 // ── Goals ──────────────────────────────────────────────────────────────────
@@ -1614,6 +1677,80 @@ pub async fn get_orgs(state: State<'_, Mutex<AppState>>) -> Result<Vec<String>, 
     Ok(rows.into_iter().map(|(o,)| o).collect())
 }
 
+// ── Entry file helpers ─────────────────────────────────────────────────────
+
+/// Find the markdown file for a given date, checking the active repo root
+/// first and then `archive/{year}/` as a fallback.
+fn find_entry_file(config: &Config, date: &str) -> Option<std::path::PathBuf> {
+    let daily = config.repo.join(format!("{date}.md"));
+    if daily.exists() {
+        return Some(daily);
+    }
+    let year = date.get(..4)?;
+    let archive = config.repo.join("archive").join(year).join(format!("{date}.md"));
+    if archive.exists() {
+        return Some(archive);
+    }
+    None
+}
+
+/// Rebuild a daily entry file omitting the block whose first trimmed line
+/// matches `raw_line`.
+fn remove_entry_block(content: &str, raw_line: &str) -> String {
+    let blocks: Vec<&str> = content.split("\n---\n").collect();
+    let header = blocks.first().copied().unwrap_or("");
+    let mut out = header.to_string();
+    for block in blocks.iter().skip(1) {
+        let trimmed = block.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.lines().next().unwrap_or("").trim() == raw_line {
+            continue; // skip the deleted entry
+        }
+        out.push_str("\n---\n");
+        out.push_str(trimmed);
+        out.push_str("\n---\n");
+    }
+    out
+}
+
+/// Rebuild a daily entry file replacing the block whose first trimmed line
+/// matches `old_raw_line` with the new content.
+fn replace_entry_block(
+    content: &str,
+    old_raw_line: &str,
+    new_raw_line: &str,
+    new_detail: Option<&str>,
+) -> String {
+    let blocks: Vec<&str> = content.split("\n---\n").collect();
+    let header = blocks.first().copied().unwrap_or("");
+    let mut out = header.to_string();
+    for block in blocks.iter().skip(1) {
+        let trimmed = block.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        out.push_str("\n---\n");
+        if trimmed.lines().next().unwrap_or("").trim() == old_raw_line {
+            out.push_str(new_raw_line);
+            if let Some(detail) = new_detail {
+                for line in detail.lines() {
+                    let l = line.trim();
+                    if !l.is_empty() {
+                        out.push_str("\n       ");
+                        out.push_str(l);
+                    }
+                }
+            }
+        } else {
+            out.push_str(trimmed);
+        }
+        out.push_str("\n---\n");
+    }
+    out
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 #[derive(sqlx::FromRow)]
@@ -1630,6 +1767,34 @@ struct EntryRow {
     org: Option<String>,
     approximate: i64,
     raw_line: String,
+}
+
+// ── Setup status ───────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct SetupStatus {
+    pub has_ai_config: bool,
+    pub has_entries: bool,
+    pub repo_path: String,
+}
+
+#[tauri::command]
+pub async fn get_setup_status(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<SetupStatus, String> {
+    let state = state.lock().await;
+
+    let has_ai_config = !state.config.ai.api_key.is_empty();
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM entries")
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let has_entries = count.0 > 0;
+
+    let repo_path = state.config.repo.to_string_lossy().to_string();
+
+    Ok(SetupStatus { has_ai_config, has_entries, repo_path })
 }
 
 fn row_to_entry(row: EntryRow) -> ParsedEntry {

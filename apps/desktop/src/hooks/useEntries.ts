@@ -26,14 +26,29 @@ export function useEntries(date?: string, org?: string) {
     };
   }, [load]);
 
-  const addEntry = useCallback(
-    async (text: string) => {
-      const entry = await invoke<Entry>("add_entry", { text });
-      setEntries((prev) => [entry, ...prev]);
-      return entry;
+  const addEntry = useCallback(async (text: string) => {
+    const entry = await invoke<Entry>("add_entry", { text });
+    setEntries((prev) => [entry, ...prev]);
+    return entry;
+  }, []);
+
+  const deleteEntry = useCallback(async (id: string) => {
+    await invoke("delete_entry", { id });
+    setEntries((prev: Entry[]) => prev.filter((e: Entry) => e.id !== id));
+  }, []);
+
+  const editEntry = useCallback(
+    async (id: string, newBody: string, newDetail?: string) => {
+      const updated = await invoke<Entry>("edit_entry", {
+        id,
+        newBody,
+        newDetail: newDetail ?? null,
+      });
+      setEntries((prev: Entry[]) => prev.map((e: Entry) => (e.id === id ? updated : e)));
+      return updated;
     },
     []
   );
 
-  return { entries, loading, reload: load, addEntry };
+  return { entries, loading, reload: load, addEntry, deleteEntry, editEntry };
 }

@@ -31,6 +31,7 @@ pub fn run() {
             commands::get_entries,
             commands::add_entry,
             commands::delete_entry,
+            commands::edit_entry,
             commands::get_goals,
             commands::update_goal_step,
             commands::archive_goal,
@@ -68,6 +69,7 @@ pub fn run() {
             commands::create_goal_from_ai,
             commands::create_playbook_from_ai,
             commands::save_digest_from_ai,
+            commands::get_setup_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
