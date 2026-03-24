@@ -177,7 +177,7 @@ export default function App() {
           {/* View */}
           <div className="flex flex-1 overflow-hidden">
             {section === "dashboard" && (
-              <DashboardView activeOrg={activeOrg} />
+              <DashboardView activeOrg={activeOrg} onNavigateToSettings={() => setSection("settings")} />
             )}
             {section === "log" && <LogView activeOrg={activeOrg} workspaces={orgs} />}
             {section === "goals" && <GoalsView activeOrg={activeOrg} />}
