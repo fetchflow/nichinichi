@@ -1632,6 +1632,34 @@ struct EntryRow {
     raw_line: String,
 }
 
+// ── Setup status ───────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct SetupStatus {
+    pub has_ai_config: bool,
+    pub has_entries: bool,
+    pub repo_path: String,
+}
+
+#[tauri::command]
+pub async fn get_setup_status(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<SetupStatus, String> {
+    let state = state.lock().await;
+
+    let has_ai_config = !state.config.ai.api_key.is_empty();
+
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM entries")
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let has_entries = count.0 > 0;
+
+    let repo_path = state.config.repo.to_string_lossy().to_string();
+
+    Ok(SetupStatus { has_ai_config, has_entries, repo_path })
+}
+
 fn row_to_entry(row: EntryRow) -> ParsedEntry {
     use nichinichi_types::EntryType;
     let entry_type = row.entry_type.parse::<EntryType>().unwrap_or(EntryType::Log);
