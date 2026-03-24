@@ -23,7 +23,12 @@ pub async fn run(config: &Config) -> Result<()> {
     // Build display labels
     let labels: Vec<String> = rows
         .iter()
-        .map(|(_, date, time, body, _)| format!("{date} {time}  {body}"))
+        .map(|(_, date, time, body, _)| {
+            let mut chars = body.chars();
+            let truncated: String = chars.by_ref().take(60).collect();
+            let suffix = if chars.next().is_some() { "…" } else { "" };
+            format!("{date} {time}  {truncated}{suffix}")
+        })
         .collect();
 
     let selection = Select::new()
