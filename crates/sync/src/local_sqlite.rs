@@ -235,3 +235,75 @@ impl SyncTarget for LocalSqlite {
         rebuild_from_disk(&self.pool, repo, config).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::open_db;
+    use nichinichi_types::EntryType;
+    use tempfile::tempdir;
+
+    fn sample_entry() -> ParsedEntry {
+        ParsedEntry {
+            id: "test-entry-001".to_string(),
+            date: "2026-03-17".to_string(),
+            time: "09:05".to_string(),
+            body: "fixed jwt refresh bug @acme #solution".to_string(),
+            detail: None,
+            entry_type: EntryType::Solution,
+            tags: vec![],
+            project: None,
+            org: Some("acme".to_string()),
+            approximate: false,
+            raw_line: "09:05 | fixed jwt refresh bug @acme #solution".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn upsert_idempotent() {
+        let dir = tempdir().unwrap();
+        let pool = open_db(dir.path()).await.unwrap();
+        let db = LocalSqlite::new(pool.clone());
+        let entry = sample_entry();
+        db.upsert_entry(&entry).await.unwrap();
+        db.upsert_entry(&entry).await.unwrap();
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM entries")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn upsert_then_query() {
+        let dir = tempdir().unwrap();
+        let pool = open_db(dir.path()).await.unwrap();
+        let db = LocalSqlite::new(pool.clone());
+        let entry = sample_entry();
+        db.upsert_entry(&entry).await.unwrap();
+        let (body,): (String,) =
+            sqlx::query_as("SELECT body FROM entries WHERE date = '2026-03-17'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(body, entry.body);
+    }
+
+    #[tokio::test]
+    async fn fts_search_finds_entry() {
+        let dir = tempdir().unwrap();
+        let pool = open_db(dir.path()).await.unwrap();
+        let db = LocalSqlite::new(pool.clone());
+        db.upsert_entry(&sample_entry()).await.unwrap();
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT e.id FROM entries e \
+             JOIN entries_fts ON entries_fts.rowid = e.rowid \
+             WHERE entries_fts MATCH 'jwt'",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "test-entry-001");
+    }
+}

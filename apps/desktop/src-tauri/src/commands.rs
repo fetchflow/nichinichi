@@ -1797,6 +1797,148 @@ pub async fn get_setup_status(
     Ok(SetupStatus { has_ai_config, has_entries, repo_path })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Daily file with three entries — mirrors the canonical format from CLAUDE.md
+    const SAMPLE: &str = "# 2026-03-17\n\
+\n---\n\
+09:05 | picking up the auth refactor @acme #log\n\
+---\n\
+11:32 | jwt refresh swallowing errors @acme #solution\n\
+---\n\
+16:48 | fixed, merged, Sarah unblocked @acme #score\n\
+---\n";
+
+    // Entry with an indented detail block
+    const SAMPLE_WITH_DETAIL: &str = "# 2026-03-17\n\
+\n---\n\
+11:32 | jwt refresh swallowing errors @acme #solution\n\
+\n       Root cause: expiry check after decode, not before\n\
+       Fix: move expiry check to top of middleware\n\
+---\n";
+
+    // ── remove_entry_block ────────────────────────────────────────────────
+
+    #[test]
+    fn remove_single_entry() {
+        let result = remove_entry_block(
+            SAMPLE_WITH_DETAIL,
+            "11:32 | jwt refresh swallowing errors @acme #solution",
+        );
+        assert!(result.contains("# 2026-03-17"), "header preserved");
+        assert!(
+            !result.contains("jwt refresh"),
+            "removed entry should be gone"
+        );
+        assert!(
+            !result.contains("Root cause"),
+            "detail block should be gone"
+        );
+    }
+
+    #[test]
+    fn remove_middle_entry() {
+        let result = remove_entry_block(
+            SAMPLE,
+            "11:32 | jwt refresh swallowing errors @acme #solution",
+        );
+        assert!(result.contains("auth refactor"), "first entry preserved");
+        assert!(result.contains("Sarah unblocked"), "third entry preserved");
+        assert!(!result.contains("jwt refresh"), "middle entry removed");
+        // Regression: adjacent entries must not produce "---\n---" (no separator)
+        assert!(
+            !result.contains("---\n---"),
+            "no adjacent --- markers without separator"
+        );
+    }
+
+    #[test]
+    fn remove_entry_with_detail() {
+        let result = remove_entry_block(
+            SAMPLE_WITH_DETAIL,
+            "11:32 | jwt refresh swallowing errors @acme #solution",
+        );
+        assert!(
+            !result.contains("expiry check"),
+            "detail lines removed with entry"
+        );
+    }
+
+    // ── replace_entry_block ───────────────────────────────────────────────
+
+    #[test]
+    fn replace_preserves_adjacent() {
+        let result = replace_entry_block(
+            SAMPLE,
+            "11:32 | jwt refresh swallowing errors @acme #solution",
+            "11:32 | jwt refresh fixed @acme #solution",
+            None,
+        );
+        assert!(result.contains("auth refactor"), "first entry intact");
+        assert!(result.contains("jwt refresh fixed"), "entry replaced");
+        assert!(result.contains("Sarah unblocked"), "third entry intact");
+        assert!(!result.contains("swallowing errors"), "old body gone");
+        // Regression: no adjacent --- corruption
+        assert!(
+            !result.contains("---\n---"),
+            "no adjacent --- markers without separator"
+        );
+    }
+
+    #[test]
+    fn replace_adds_detail() {
+        let result = replace_entry_block(
+            SAMPLE,
+            "09:05 | picking up the auth refactor @acme #log",
+            "09:05 | picking up the auth refactor @acme #log",
+            Some("Root cause: some reason\nFix: the fix"),
+        );
+        // Detail lines must be indented with 7 spaces
+        assert!(
+            result.contains("       Root cause: some reason"),
+            "detail indented 7 spaces"
+        );
+        assert!(
+            result.contains("       Fix: the fix"),
+            "second detail line indented"
+        );
+    }
+
+    #[test]
+    fn replace_strips_detail() {
+        let result = replace_entry_block(
+            SAMPLE_WITH_DETAIL,
+            "11:32 | jwt refresh swallowing errors @acme #solution",
+            "11:32 | jwt refresh swallowing errors @acme #solution",
+            None,
+        );
+        assert!(
+            !result.contains("Root cause"),
+            "detail stripped when new_detail is None"
+        );
+        assert!(
+            result.contains("11:32 | jwt refresh swallowing errors @acme #solution"),
+            "entry still present"
+        );
+    }
+
+    #[test]
+    fn replace_no_match_unchanged() {
+        let result = replace_entry_block(
+            SAMPLE,
+            "99:99 | nonexistent entry",
+            "99:99 | replacement",
+            None,
+        );
+        assert!(result.contains("auth refactor"), "first entry untouched");
+        assert!(result.contains("jwt refresh"), "second entry untouched");
+        assert!(result.contains("Sarah unblocked"), "third entry untouched");
+        assert!(!result.contains("replacement"), "no spurious replacement");
+    }
+}
+
 fn row_to_entry(row: EntryRow) -> ParsedEntry {
     use nichinichi_types::EntryType;
     let entry_type = row.entry_type.parse::<EntryType>().unwrap_or(EntryType::Log);

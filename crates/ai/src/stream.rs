@@ -218,6 +218,37 @@ fn build_system_prompt(entries: &[ParsedEntry]) -> String {
     prompt
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn extract_delta_text_valid() {
+        let event = json!({
+            "choices": [{"delta": {"content": "hello world"}, "finish_reason": null}]
+        });
+        assert_eq!(
+            extract_delta_text(&event),
+            Some("hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_delta_text_missing_content_field() {
+        let event = json!({"choices": [{"delta": {}}]});
+        assert_eq!(extract_delta_text(&event), None);
+    }
+
+    #[test]
+    fn extract_delta_text_empty_content() {
+        let event = json!({
+            "choices": [{"delta": {"content": ""}}]
+        });
+        assert_eq!(extract_delta_text(&event), None, "empty string yields None");
+    }
+}
+
 fn extract_delta_text(event: &Value) -> Option<String> {
     // OpenAI-compatible SSE format:
     // {"choices":[{"delta":{"content":"..."},"finish_reason":null}]}
