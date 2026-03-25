@@ -18,10 +18,10 @@ impl AiClient {
         }
     }
 
-    /// Fetch available model IDs from the Open WebUI `/api/models` endpoint.
+    /// Fetch available model IDs from the `/v1/models` endpoint.
     pub async fn list_models(&self) -> Result<Vec<String>, AiError> {
         let url = format!(
-            "{}/api/models",
+            "{}/v1/models",
             self.config.base_url.trim_end_matches('/')
         );
         let resp = self
@@ -89,7 +89,7 @@ impl AiClient {
         messages.push(json!({"role": "user", "content": user_query}));
 
         let url = format!(
-            "{}/api/chat/completions",
+            "{}/v1/chat/completions",
             self.config.base_url.trim_end_matches('/')
         );
 
