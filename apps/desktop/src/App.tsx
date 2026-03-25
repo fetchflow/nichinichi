@@ -223,7 +223,7 @@ export default function App() {
               activeOrg={activeOrg}
               availableOrgs={orgs}
               layout={aiLayout}
-              onAsk={(q, model) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg, model)}
+              onAsk={(q) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg)}
               onClear={ai.clear}
               onClose={() => { setAiOpen(false); setAiLayout("panel"); }}
               onLoad={ai.loadConversation}

@@ -334,7 +334,7 @@ interface Props {
   activeOrg: string;
   availableOrgs: string[];
   layout: "panel" | "half" | "full";
-  onAsk: (query: string, model: string) => void;
+  onAsk: (query: string) => void;
   onClear: () => void;
   onClose: () => void;
   onLoad: (messages: AiMessage[]) => void;
@@ -343,8 +343,6 @@ interface Props {
 
 export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout, onAsk, onClear, onClose, onLoad, onLayoutChange }: Props) {
   const [input, setInput] = useState("");
-  const [models, setModels] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState("");
   const [history, setHistory] = useState<AiConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [loadedConv, setLoadedConv] = useState<AiConversationSummary | null>(null);
@@ -366,15 +364,6 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
   }, [messages]);
 
   useEffect(() => {
-    invoke<string[]>("get_models")
-      .then((list) => {
-        setModels(list);
-        if (list.length > 0 && !selectedModel) setSelectedModel(list[0]);
-      })
-      .catch(() => {}); // silently ignore if base_url not configured yet
-  }, []);
-
-  useEffect(() => {
     const org = activeOrg === "all" ? null : activeOrg;
     invoke<AiConversationSummary[]>("get_ai_conversations", { org })
       .then(setHistory)
@@ -386,7 +375,7 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
     const q = input.trim();
     if (!q || streaming) return;
     setShowHistory(false);
-    onAsk(q, selectedModel);
+    onAsk(q);
     setInput("");
     // reset textarea height
     if (inputRef.current) inputRef.current.style.height = "auto";
@@ -468,19 +457,6 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
           <span className="text-xs font-semibold tracking-wide text-gray-500 dark:text-gray-400 uppercase shrink-0">
             Nichinichi
           </span>
-          {models.length > 0 && (
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              disabled={streaming}
-              className="min-w-0 max-w-full bg-transparent text-xs text-gray-400 dark:text-gray-500 border-none focus:outline-none
-                         disabled:opacity-50 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300 transition-colors truncate"
-            >
-              {models.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          )}
         </div>
         <div className="flex items-center gap-1.5">
           <button
