@@ -253,27 +253,19 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
           <div>
             <label className="text-xs text-gray-500 block mb-1">Model</label>
             <div className="flex gap-2">
-              {models.length > 0 ? (
-                <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
-                             border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
-                >
-                  {models.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder="llama3.2"
-                  className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
-                             border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
-                />
-              )}
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                disabled={models.length === 0}
+                className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
+                           border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500
+                           disabled:opacity-50"
+              >
+                {models.length === 0
+                  ? <option value="">— hit ↻ to load models —</option>
+                  : models.map((m) => <option key={m} value={m}>{m}</option>)
+                }
+              </select>
               <button
                 type="button"
                 onClick={fetchModels}
