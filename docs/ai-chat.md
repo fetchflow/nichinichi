@@ -1,20 +1,24 @@
 # AI Chat
 
-The desktop app includes a persistent AI chat panel powered by any OpenAI-compatible backend (Open WebUI, Ollama, LiteLLM, a hosted API, etc.).
+The desktop app includes a persistent AI chat panel powered by any OpenAI-compatible backend (Ollama, Open WebUI, LiteLLM, a hosted API, etc.).
 
 ---
 
 ## Setup
 
-In **Settings**, fill in:
+In **Settings → AI Settings**:
 
-| Field | Example | Notes |
+1. **Provider** — choose **Ollama** (default) or **Open WebUI**. This controls which endpoint paths are used; the Base URL auto-fills with the canonical default when switching.
+2. **Base URL** — URL of your AI backend (no path suffix).
+3. **Model** — click **↻** to load available models from the backend, then select one. Changing the model takes effect immediately — no Save required.
+4. **API Key** — click **Save** to persist the key (and the current base URL) to `~/.nichinichi.yml`.
+
+| Provider | Default Base URL | Chat endpoint |
 |---|---|---|
-| Base URL | `http://localhost:3000` | URL of your AI backend — no path suffix needed |
-| API Key | _(your key)_ | Passed as `Authorization: Bearer {key}` |
-| Model | `llama3.2` | Any model available in your backend |
+| Ollama | `http://localhost:11434` | `{base_url}/v1/chat/completions` |
+| Open WebUI | `http://localhost:3000` | `{base_url}/api/chat/completions` |
 
-The client posts to `{base_url}/api/chat/completions` using the standard OpenAI chat completions format with SSE streaming.
+Open WebUI can also proxy cloud models (Anthropic, OpenAI, etc.) through the same interface.
 
 ---
 
@@ -36,7 +40,7 @@ Type in the textarea at the bottom of the panel:
 - **Shift+Enter** — insert a newline
 - The textarea auto-expands as you type
 
-The model selector (shown in the header) lets you switch models per-conversation while not streaming.
+The active model is set in **Settings → AI Settings** and applies to all queries. Change it at any time — no Save required.
 
 ### What Nichinichi knows
 
