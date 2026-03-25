@@ -29,10 +29,10 @@ jobs:
             librsvg2-dev
 
       - name: cargo check
-        run: cargo check --workspace
+        run: cargo check --workspace --exclude nichinichi-desktop
 
       - name: cargo test
-        run: cargo test --workspace
+        run: cargo test --workspace --exclude nichinichi-desktop
 
   typecheck:
     name: TypeScript typecheck

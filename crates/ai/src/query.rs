@@ -108,6 +108,33 @@ struct EntryRow {
     raw_line: String,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_strips_fts_special_chars() {
+        let q = build_fts_query("jwt*(auth)\"bug\"");
+        assert!(!q.contains('*'), "star stripped");
+        assert!(!q.contains('('), "paren stripped");
+        assert!(!q.contains('"'), "quote stripped");
+    }
+
+    #[test]
+    fn empty_query_returns_star() {
+        assert_eq!(build_fts_query(""), "*");
+        assert_eq!(build_fts_query("   "), "*");
+    }
+
+    #[test]
+    fn normal_query_terms_preserved() {
+        let q = build_fts_query("jwt auth bug");
+        assert!(q.contains("jwt"), "jwt preserved");
+        assert!(q.contains("auth"), "auth preserved");
+        assert!(q.contains("bug"), "bug preserved");
+    }
+}
+
 fn row_to_entry(row: EntryRow) -> ParsedEntry {
     let entry_type = row.entry_type.parse::<EntryType>().unwrap_or(EntryType::Log);
     let tags: Vec<String> = serde_json::from_str(&row.tags).unwrap_or_default();
