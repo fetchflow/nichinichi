@@ -34,7 +34,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
     invoke<string[]>("get_models")
       .then((list) => {
         setModels(list);
-        if (list.length > 0 && !model) setModel(list[0]);
+        if (list.length > 0 && !list.includes(model)) setModel(list[0]);
       })
       .catch(() => {})
       .finally(() => setLoadingModels(false));
