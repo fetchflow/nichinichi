@@ -167,7 +167,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
     try {
       await invoke("save_ai_config", {
         apiKey: apiKey.trim(),
-        baseUrl: baseUrl.trim() || "http://localhost:3000",
+        baseUrl: baseUrl.trim() || "http://localhost:11434",
         model: model.trim() || "llama3.2",
       });
       setSaved(true);
@@ -190,12 +190,12 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
               type="text"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="http://localhost:3000"
+              placeholder="http://localhost:11434"
               className="w-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
                          border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
             />
             <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
-              Open WebUI URL — requests go to {"{base_url}"}/api/chat/completions
+              Ollama or any OpenAI-compatible API — requests go to {"{base_url}"}/v1/chat/completions
             </p>
           </div>
           <div>
