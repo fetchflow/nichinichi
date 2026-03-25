@@ -30,7 +30,7 @@ Log daily work from the CLI or desktop app. All data lives as plain markdown fil
 | Desktop UI | Tauri v2 + React 18 + TypeScript + Tailwind CSS |
 | CLI | `nichinichi` binary (clap) |
 | Database | SQLite via sqlx (reconstructable index) |
-| AI | OpenAI-compatible API — Open WebUI, Ollama, LiteLLM, or any provider |
+| AI | OpenAI-compatible API — Ollama, Open WebUI, LiteLLM, or any provider |
 | Search | SQLite FTS5 |
 
 ---
@@ -91,19 +91,29 @@ repo: ~/nichinichi        # where your markdown files live
 editor: vim               # $EDITOR fallback for CLI
 
 ai:
-  base_url: http://localhost:3000   # Open WebUI, Ollama, LiteLLM, etc.
+  provider: ollama                  # "ollama" (default) or "openwebui"
+  base_url: http://localhost:11434  # Ollama default; Open WebUI default is http://localhost:3000
   api_key: ""                       # enter via Settings UI
-  model: llama3.2                   # any model loaded in your AI backend
+  model: llama3.2                   # startup default — selection is live state in the app
 
 default_org: personal
 ```
 
-The AI client speaks the OpenAI-compatible chat completions format (`POST {base_url}/api/chat/completions`, `Authorization: Bearer {api_key}`). Any provider that implements this format works.
+The `provider` field controls which endpoint paths are used:
+
+| Provider | Chat endpoint | Model list endpoint |
+|---|---|---|
+| `ollama` (default) | `{base_url}/v1/chat/completions` | `{base_url}/v1/models` (fallback: `/api/tags`) |
+| `openwebui` | `{base_url}/api/chat/completions` | `{base_url}/api/models` |
+
+Both providers use the OpenAI-compatible chat completions format with SSE streaming. Open WebUI can proxy cloud models (Anthropic, OpenAI, etc.) through the same interface.
+
+**Settings UI**: use the **Provider** toggle to switch between Ollama and Open WebUI. The Base URL auto-fills with the canonical default when switching; custom URLs are preserved. The **Model** dropdown is populated live from the selected provider — changing it takes effect immediately, no Save required.
 
 **CLI env var fallbacks** (when no config file exists):
 ```bash
 export AI_API_KEY=...
-export AI_BASE_URL=http://localhost:3000
+export AI_BASE_URL=http://localhost:11434
 export AI_MODEL=llama3.2
 ```
 
@@ -250,7 +260,8 @@ See [docs/development.md](docs/development.md) for the full guide and [docs/test
 - **`SyncTarget` trait** provides the seam for a future cloud sync backend without touching CLI or Tauri commands
 - **Goal write-back** — UI changes write to the `.md` file first, SQLite second
 - **No auth in Phase 1** — the app opens directly to the dashboard
-- **OpenAI-compatible AI client** — works with any local or hosted model that implements the `/api/chat/completions` endpoint
+- **Provider-aware AI client** — Ollama uses `/v1/` paths; Open WebUI uses `/api/` paths; both speak OpenAI-compatible SSE streaming. `provider` field in config with `#[serde(default)]` keeps old config files working
+- **Model selection is live app state** — the YAML `model` field is only the startup default; selecting a model in Settings takes effect immediately without a Save
 
 ---
 
