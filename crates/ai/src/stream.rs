@@ -1,5 +1,5 @@
 use crate::AiError;
-use nichinichi_types::{AiConfig, ChatMessage, ParsedEntry};
+use nichinichi_types::{AiConfig, AiProvider, ChatMessage, ParsedEntry};
 use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -18,14 +18,26 @@ impl AiClient {
         }
     }
 
-    /// Fetch available model IDs.
-    ///
-    /// Tries `/v1/models` (OpenAI-compat) first. Falls back to Ollama's native
-    /// `/api/tags` endpoint if the first returns a non-success status.
+    fn chat_url(&self) -> String {
+        let base = self.config.base_url.trim_end_matches('/');
+        match self.config.provider {
+            AiProvider::Ollama    => format!("{}/v1/chat/completions", base),
+            AiProvider::Openwebui => format!("{}/api/chat/completions", base),
+        }
+    }
+
+    /// Fetch available model IDs, routing to the correct endpoint by provider.
     pub async fn list_models(&self) -> Result<Vec<String>, AiError> {
+        match self.config.provider {
+            AiProvider::Ollama    => self.list_models_ollama().await,
+            AiProvider::Openwebui => self.list_models_openwebui().await,
+        }
+    }
+
+    /// Ollama: try `/v1/models` (OpenAI-compat), fall back to `/api/tags`.
+    async fn list_models_ollama(&self) -> Result<Vec<String>, AiError> {
         let base = self.config.base_url.trim_end_matches('/');
 
-        // Try OpenAI-compat endpoint first (works with OpenAI, LiteLLM, newer Ollama)
         let v1_resp = self
             .client
             .get(format!("{}/v1/models", base))
@@ -63,6 +75,31 @@ impl AiClient {
             .unwrap_or(&vec![])
             .iter()
             .filter_map(|m| m["name"].as_str().map(String::from))
+            .collect())
+    }
+
+    /// Open WebUI: `/api/models` returning `data[].id`.
+    async fn list_models_openwebui(&self) -> Result<Vec<String>, AiError> {
+        let base = self.config.base_url.trim_end_matches('/');
+        let resp = self
+            .client
+            .get(format!("{}/api/models", base))
+            .header("Authorization", format!("Bearer {}", self.config.api_key))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AiError::Api { status, body });
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json["data"]
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .filter_map(|m| m["id"].as_str().map(String::from))
             .collect())
     }
 
@@ -106,10 +143,7 @@ impl AiClient {
         }
         messages.push(json!({"role": "user", "content": user_query}));
 
-        let url = format!(
-            "{}/v1/chat/completions",
-            self.config.base_url.trim_end_matches('/')
-        );
+        let url = self.chat_url();
 
         let body = json!({
             "model": self.config.model,
