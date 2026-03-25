@@ -1,11 +1,21 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AiProvider {
+    #[default]
+    Ollama,
+    Openwebui,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiConfig {
     pub base_url: String,
     pub api_key: String,
     pub model: String,
+    #[serde(default)]
+    pub provider: AiProvider,
 }
 
 impl Default for AiConfig {
@@ -14,6 +24,7 @@ impl Default for AiConfig {
             base_url: "http://localhost:11434".to_string(),
             api_key: String::new(),
             model: String::new(),
+            provider: AiProvider::Ollama,
         }
     }
 }

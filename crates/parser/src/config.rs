@@ -79,6 +79,11 @@ fn config_from_yaml(raw: &serde_yaml::Value, home: &Path) -> Config {
                 .and_then(|v| v.as_str())
                 .map(String::from)
                 .unwrap_or_else(|| "claude-sonnet-4-5".to_string()),
+            provider: ai_node
+                .get("provider")
+                .and_then(|v| v.as_str())
+                .and_then(|s| serde_yaml::from_str(s).ok())
+                .unwrap_or_default(),
         }
     } else {
         AiConfig::default()
