@@ -1,6 +1,6 @@
 use nichinichi_ai::{list_conversations, load_conversation, save_conversation, search_entries, AiClient};
 use nichinichi_sync::{rebuild_from_disk, sync_incremental, LocalSqlite, SyncTarget};
-use nichinichi_types::{ChatMessage, Config, Digest, Goal, OrgScope, ParsedEntry, Playbook};
+use nichinichi_types::{AiProvider, ChatMessage, Config, Digest, Goal, OrgScope, ParsedEntry, Playbook};
 use serde::Serialize;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
@@ -1018,6 +1018,7 @@ pub async fn save_ai_config(
     api_key: String,
     base_url: String,
     model: String,
+    provider: String,
     state: State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
     let mut state = state.lock().await;
@@ -1026,6 +1027,10 @@ pub async fn save_ai_config(
     state.config.ai.api_key = api_key.clone();
     state.config.ai.base_url = base_url.clone();
     state.config.ai.model = model.clone();
+    state.config.ai.provider = match provider.as_str() {
+        "openwebui" => AiProvider::Openwebui,
+        _ => AiProvider::Ollama,
+    };
 
     // Write to ~/.nichinichi.yml
     let home = dirs::home_dir().ok_or("cannot find home directory")?;
@@ -1033,12 +1038,13 @@ pub async fn save_ai_config(
     let content = if config_path.exists() {
         std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?
     } else {
-        "repo: ~/nichinichi\nai:\n  base_url: \"http://localhost:11434\"\n  api_key: \"\"\n  model: \"\"\n".to_string()
+        "repo: ~/nichinichi\nai:\n  base_url: \"http://localhost:11434\"\n  api_key: \"\"\n  model: \"\"\n  provider: \"ollama\"\n".to_string()
     };
 
     let updated = replace_yaml_field(&content, "api_key", &api_key);
     let updated = replace_yaml_field(&updated, "base_url", &base_url);
     let updated = replace_yaml_field(&updated, "model", &model);
+    let updated = replace_yaml_field(&updated, "provider", &provider);
 
     std::fs::write(&config_path, updated).map_err(|e| e.to_string())?;
     Ok(())
@@ -1078,9 +1084,14 @@ pub async fn get_ai_config(
     state: State<'_, Mutex<AppState>>,
 ) -> Result<serde_json::Value, String> {
     let state = state.lock().await;
+    let provider = match state.config.ai.provider {
+        AiProvider::Ollama    => "ollama",
+        AiProvider::Openwebui => "openwebui",
+    };
     Ok(serde_json::json!({
         "base_url": state.config.ai.base_url,
         "model": state.config.ai.model,
+        "provider": provider,
     }))
 }
 
