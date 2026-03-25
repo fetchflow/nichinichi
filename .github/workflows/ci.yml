@@ -18,6 +18,16 @@ jobs:
         with:
           workspaces: '. -> target'
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
       - name: cargo check
         run: cargo check --workspace --exclude nichinichi-desktop
 
@@ -37,7 +47,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install
