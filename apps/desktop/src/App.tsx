@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { AskPanel } from "./components/ai/AskPanel";
 import { useAi } from "./hooks/useAi";
@@ -42,11 +43,19 @@ export default function App() {
   const [aiOpen, setAiOpen] = useState(false);
   const [aiWidth, setAiWidth] = useState(AI_PANEL_DEFAULT);
   const [aiLayout, setAiLayout] = useState<"panel" | "half" | "full">("panel");
+  const [activeModel, setActiveModel] = useState("");
   const isResizing = useRef(false);
   const { theme, setTheme } = useTheme();
   const { activeOrg, setActiveOrg, orgs, workspaces, setWorkspaces } = useOrg();
   const ai = useAi();
   const sync = useSyncStatus();
+
+  // Load initial model from config
+  useEffect(() => {
+    invoke<{ model: string }>("get_ai_config")
+      .then(({ model }) => { if (model) setActiveModel(model); })
+      .catch(() => {});
+  }, []);
 
   // Tick every 30s to keep relative time display fresh
   const [, setTick] = useState(0);
@@ -223,7 +232,7 @@ export default function App() {
               activeOrg={activeOrg}
               availableOrgs={orgs}
               layout={aiLayout}
-              onAsk={(q, model) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg, model)}
+              onAsk={(q) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg, activeModel || undefined)}
               onClear={ai.clear}
               onClose={() => { setAiOpen(false); setAiLayout("panel"); }}
               onLoad={ai.loadConversation}
@@ -242,6 +251,8 @@ export default function App() {
               syncing={sync.syncing}
               workspaces={workspaces}
               onWorkspacesChange={setWorkspaces}
+              activeModel={activeModel}
+              onModelChange={setActiveModel}
             />
           </div>
         )}

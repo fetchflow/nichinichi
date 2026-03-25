@@ -12,22 +12,54 @@ interface Props {
   syncing: boolean;
   workspaces: string[];
   onWorkspacesChange: (ws: string[]) => void;
+  activeModel: string;
+  onModelChange: (m: string) => void;
 }
 
-export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspaces, onWorkspacesChange }: Props) {
+export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspaces, onWorkspacesChange, activeModel, onModelChange }: Props) {
+  const PROVIDER_DEFAULTS: Record<string, string> = {
+    ollama: "http://localhost:11434",
+    openwebui: "http://localhost:3000",
+  };
+
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
-  const [model, setModel] = useState("");
+  const [provider, setProvider] = useState<"ollama" | "openwebui">("ollama");
+  const [models, setModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const fetchModels = () => {
+    setLoadingModels(true);
+    invoke<string[]>("get_models")
+      .then((list) => {
+        setModels(list);
+        if (list.length > 0 && !list.includes(activeModel)) onModelChange(list[0]);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingModels(false));
+  };
+
+  const handleProviderChange = (p: "ollama" | "openwebui") => {
+    setProvider(p);
+    setModels([]);
+    // Swap base URL only if it currently equals the other provider's default
+    const otherDefault = PROVIDER_DEFAULTS[provider];
+    if (!baseUrl || baseUrl === otherDefault) {
+      setBaseUrl(PROVIDER_DEFAULTS[p]);
+    }
+  };
+
   useEffect(() => {
-    invoke<{ base_url: string; model: string }>("get_ai_config")
-      .then(({ base_url, model }) => {
+    invoke<{ base_url: string; model: string; provider?: string }>("get_ai_config")
+      .then(({ base_url, model, provider: p }) => {
         if (base_url) setBaseUrl(base_url);
-        if (model) setModel(model);
+        if (model) onModelChange(model);
+        if (p === "openwebui") setProvider("openwebui");
       })
       .catch(() => {});
+    fetchModels();
   }, []);
 
   const { timezone, setTimezone, resetToSystem } = useTimezone();
@@ -167,12 +199,14 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
     try {
       await invoke("save_ai_config", {
         apiKey: apiKey.trim(),
-        baseUrl: baseUrl.trim() || "http://localhost:3000",
-        model: model.trim() || "llama3.2",
+        baseUrl: baseUrl.trim() || PROVIDER_DEFAULTS[provider],
+        model: activeModel || "llama3.2",
+        provider,
       });
       setSaved(true);
       setApiKey(""); // clear key field only — base_url and model remain visible
       setTimeout(() => setSaved(false), 2000);
+      fetchModels();
     } finally {
       setSaving(false);
     }
@@ -185,29 +219,65 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
         <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">AI Settings</h2>
         <div className="space-y-3">
           <div>
+            <label className="text-xs text-gray-500 block mb-1">Provider</label>
+            <div className="flex gap-2">
+              {(["ollama", "openwebui"] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => handleProviderChange(p)}
+                  className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                    provider === p
+                      ? "bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {p === "ollama" ? "Ollama" : "Open WebUI"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
             <label className="text-xs text-gray-500 block mb-1">Base URL</label>
             <input
               type="text"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="http://localhost:3000"
+              placeholder={PROVIDER_DEFAULTS[provider]}
               className="w-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
                          border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
             />
             <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
-              Open WebUI URL — requests go to {"{base_url}"}/api/chat/completions
+              Requests go to {"{base_url}"}{provider === "ollama" ? "/v1/chat/completions" : "/api/chat/completions"}
             </p>
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">Model</label>
-            <input
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="llama3.2"
-              className="w-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
-                         border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
-            />
+            <div className="flex gap-2">
+              <select
+                value={activeModel}
+                onChange={(e) => onModelChange(e.target.value)}
+                disabled={models.length === 0}
+                className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
+                           border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500
+                           disabled:opacity-50"
+              >
+                {models.length === 0
+                  ? <option value={activeModel}>{activeModel || "— hit ↻ to load models —"}</option>
+                  : models.map((m) => <option key={m} value={m}>{m}</option>)
+                }
+              </select>
+              <button
+                type="button"
+                onClick={fetchModels}
+                disabled={loadingModels}
+                title="Refresh model list"
+                className="px-3 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-40
+                           text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+              >
+                {loadingModels ? "…" : "↻"}
+              </button>
+            </div>
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">API Key</label>

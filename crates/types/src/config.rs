@@ -1,19 +1,30 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AiProvider {
+    #[default]
+    Ollama,
+    Openwebui,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiConfig {
     pub base_url: String,
     pub api_key: String,
     pub model: String,
+    #[serde(default)]
+    pub provider: AiProvider,
 }
 
 impl Default for AiConfig {
     fn default() -> Self {
         Self {
-            base_url: "https://api.anthropic.com".to_string(),
+            base_url: "http://localhost:11434".to_string(),
             api_key: String::new(),
-            model: "claude-sonnet-4-5".to_string(),
+            model: String::new(),
+            provider: AiProvider::Ollama,
         }
     }
 }
