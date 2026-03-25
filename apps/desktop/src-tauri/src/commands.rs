@@ -1033,7 +1033,7 @@ pub async fn save_ai_config(
     let content = if config_path.exists() {
         std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?
     } else {
-        "repo: ~/nichinichi\nai:\n  base_url: \"\"\n  api_key: \"\"\n  model: \"\"\n".to_string()
+        "repo: ~/nichinichi\nai:\n  base_url: \"http://localhost:11434\"\n  api_key: \"\"\n  model: \"\"\n".to_string()
     };
 
     let updated = replace_yaml_field(&content, "api_key", &api_key);
