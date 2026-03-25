@@ -12,9 +12,11 @@ interface Props {
   syncing: boolean;
   workspaces: string[];
   onWorkspacesChange: (ws: string[]) => void;
+  activeModel: string;
+  onModelChange: (m: string) => void;
 }
 
-export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspaces, onWorkspacesChange }: Props) {
+export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspaces, onWorkspacesChange, activeModel, onModelChange }: Props) {
   const PROVIDER_DEFAULTS: Record<string, string> = {
     ollama: "http://localhost:11434",
     openwebui: "http://localhost:3000",
@@ -22,7 +24,6 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
 
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
-  const [model, setModel] = useState("");
   const [provider, setProvider] = useState<"ollama" | "openwebui">("ollama");
   const [models, setModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -34,7 +35,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
     invoke<string[]>("get_models")
       .then((list) => {
         setModels(list);
-        if (list.length > 0 && !list.includes(model)) setModel(list[0]);
+        if (list.length > 0 && !list.includes(activeModel)) onModelChange(list[0]);
       })
       .catch(() => {})
       .finally(() => setLoadingModels(false));
@@ -54,7 +55,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
     invoke<{ base_url: string; model: string; provider?: string }>("get_ai_config")
       .then(({ base_url, model, provider: p }) => {
         if (base_url) setBaseUrl(base_url);
-        if (model) setModel(model);
+        if (model) onModelChange(model);
         if (p === "openwebui") setProvider("openwebui");
       })
       .catch(() => {});
@@ -199,7 +200,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
       await invoke("save_ai_config", {
         apiKey: apiKey.trim(),
         baseUrl: baseUrl.trim() || PROVIDER_DEFAULTS[provider],
-        model: model.trim() || "llama3.2",
+        model: activeModel || "llama3.2",
         provider,
       });
       setSaved(true);
@@ -254,15 +255,15 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
             <label className="text-xs text-gray-500 block mb-1">Model</label>
             <div className="flex gap-2">
               <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
+                value={activeModel}
+                onChange={(e) => onModelChange(e.target.value)}
                 disabled={models.length === 0}
                 className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-3 py-2
                            border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500
                            disabled:opacity-50"
               >
                 {models.length === 0
-                  ? <option value="">— hit ↻ to load models —</option>
+                  ? <option value={activeModel}>{activeModel || "— hit ↻ to load models —"}</option>
                   : models.map((m) => <option key={m} value={m}>{m}</option>)
                 }
               </select>
