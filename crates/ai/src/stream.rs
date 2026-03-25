@@ -18,34 +18,52 @@ impl AiClient {
         }
     }
 
-    /// Fetch available model IDs from the `/v1/models` endpoint.
+    /// Fetch available model IDs.
+    ///
+    /// Tries `/v1/models` (OpenAI-compat) first. Falls back to Ollama's native
+    /// `/api/tags` endpoint if the first returns a non-success status.
     pub async fn list_models(&self) -> Result<Vec<String>, AiError> {
-        let url = format!(
-            "{}/v1/models",
-            self.config.base_url.trim_end_matches('/')
-        );
-        let resp = self
+        let base = self.config.base_url.trim_end_matches('/');
+
+        // Try OpenAI-compat endpoint first (works with OpenAI, LiteLLM, newer Ollama)
+        let v1_resp = self
             .client
-            .get(&url)
+            .get(format!("{}/v1/models", base))
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .send()
             .await?;
 
-        if !resp.status().is_success() {
-            let status = resp.status().as_u16();
-            let body = resp.text().await.unwrap_or_default();
+        if v1_resp.status().is_success() {
+            let json: serde_json::Value = v1_resp.json().await?;
+            return Ok(json["data"]
+                .as_array()
+                .unwrap_or(&vec![])
+                .iter()
+                .filter_map(|m| m["id"].as_str().map(String::from))
+                .collect());
+        }
+
+        // Fall back to native Ollama /api/tags
+        let tags_resp = self
+            .client
+            .get(format!("{}/api/tags", base))
+            .header("Authorization", format!("Bearer {}", self.config.api_key))
+            .send()
+            .await?;
+
+        if !tags_resp.status().is_success() {
+            let status = tags_resp.status().as_u16();
+            let body = tags_resp.text().await.unwrap_or_default();
             return Err(AiError::Api { status, body });
         }
 
-        let json: serde_json::Value = resp.json().await?;
-        let ids = json["data"]
+        let json: serde_json::Value = tags_resp.json().await?;
+        Ok(json["models"]
             .as_array()
             .unwrap_or(&vec![])
             .iter()
-            .filter_map(|m| m["id"].as_str().map(String::from))
-            .collect();
-
-        Ok(ids)
+            .filter_map(|m| m["name"].as_str().map(String::from))
+            .collect())
     }
 
     /// Ask the AI a question, streaming the response.
