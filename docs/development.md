@@ -59,12 +59,23 @@ types  ←  parser  ←  sync  ←  ai
 ## Key environment variables (CLI only)
 
 ```bash
-AI_API_KEY=...                        # API key for your AI provider
-AI_BASE_URL=http://localhost:3000     # Open WebUI, Ollama, LiteLLM, etc.
+AI_API_KEY=...                         # API key for your AI provider
+AI_BASE_URL=http://localhost:11434     # Ollama default; Open WebUI default is http://localhost:3000
 AI_MODEL=llama3.2
 ```
 
 The desktop app reads from `~/.nichinichi.yml` (configured via Settings UI). Environment variables are only used as a fallback when no config file exists.
+
+## AI provider routing
+
+The `crates/ai` crate routes requests based on `AiConfig.provider` (`AiProvider::Ollama` or `AiProvider::Openwebui`):
+
+| Provider | Chat endpoint | Model list endpoint |
+|---|---|---|
+| `Ollama` (default) | `/v1/chat/completions` | `/v1/models` (fallback: `/api/tags`) |
+| `Openwebui` | `/api/chat/completions` | `/api/models` |
+
+`AiProvider` uses `#[serde(default)]` so existing `~/.nichinichi.yml` files without a `provider` field continue to work (defaults to Ollama).
 
 ## Database
 
