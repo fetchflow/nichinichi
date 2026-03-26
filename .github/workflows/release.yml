@@ -53,6 +53,7 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
