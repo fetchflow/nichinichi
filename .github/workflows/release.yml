@@ -21,7 +21,7 @@ jobs:
             cli-target: '--target aarch64-apple-darwin'
             cli-binary: target/aarch64-apple-darwin/release/nichinichi
             cli-asset-name: nichinichi-aarch64-apple-darwin
-          - platform: macos-13       # x86_64 (Intel)
+          - platform: macos-latest   # x86_64 (Intel, cross-compiled from arm64)
             args: '--target x86_64-apple-darwin'
             rust-targets: x86_64-apple-darwin
             cli-target: '--target x86_64-apple-darwin'
