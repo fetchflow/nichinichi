@@ -280,3 +280,9 @@ git push -u origin main
 ```
 
 On a new machine: clone the repo, run `nichinichi sync --rebuild` to reconstruct the database.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE)

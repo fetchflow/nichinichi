@@ -2,6 +2,7 @@
 name = "nichinichi-sync"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 nichinichi-types  = { workspace = true }

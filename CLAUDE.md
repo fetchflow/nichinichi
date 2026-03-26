@@ -15,25 +15,16 @@ login screen and no network dependency for core features.
 
 ---
 
-## Tiers
+## Design
 
-### Free tier (MVP — what this codebase implements)
-- No authentication, no account required
+- No authentication required — the app opens directly to the dashboard
 - All data local: markdown files + SQLite
 - FTS via SQLite FTS5
 - AI via user-supplied API key (entered in Settings UI, saved to
   `~/.nichinichi.yml`)
 - Git is the backup and multi-machine sync mechanism
-- The app opens directly to the dashboard — no login gate
-
-### Cloud tier (Phase 2 — architecture prepared, not yet built)
-- Supabase auth (email + GitHub OAuth)
-- Delta sync from local SQLite to Supabase
-- Cloud FTS via Postgres
-- Optional cloud AI (user doesn't need own key)
-- The seam lives in the `sync` crate via the `SyncTarget` trait —
-  swapping in `SupabaseSync` must not require changes to Tauri commands
-  or CLI commands
+- The `SyncTarget` trait in `crates/sync` provides the seam for future
+  sync backends without requiring changes to Tauri commands or CLI
 
 ---
 
@@ -589,11 +580,11 @@ Goals, Dashboard graphs.
 
 ---
 
-## SyncTarget Trait (Phase 2 seam)
+## SyncTarget Trait
 
-Define this in `crates/sync` now. Only `LocalSqlite` is implemented in
-Phase 1. When cloud sync arrives, `SupabaseSync` implements the same
-trait without touching Tauri commands or CLI.
+Defined in `crates/sync`. `LocalSqlite` is the only implementation.
+The trait provides a seam for adding additional sync backends without
+touching Tauri commands or CLI code.
 
 ```rust
 #[async_trait]
@@ -607,11 +598,8 @@ pub trait SyncTarget: Send + Sync {
 }
 
 pub struct LocalSqlite {
-    pub pool: SqlitePool,  // sqlx or rusqlite pool
+    pub pool: SqlitePool,  // sqlx pool
 }
-
-// Phase 2 (not implemented):
-// pub struct SupabaseSync { ... }
 ```
 
 ---
@@ -765,9 +753,8 @@ desktop app always reads from the config file.
   they are not written to markdown and are cleared on rebuild
 - `@org` tags are first-class parsed fields, not stored in `tags[]`
 - Orgs are discovered dynamically from file content — no org registry
-- `SyncTarget` trait defined now with only `LocalSqlite` implemented —
-  `SupabaseSync` will implement the same trait in Phase 2 with no
-  changes to commands or CLI
+- `SyncTarget` trait with `LocalSqlite` implementation in `crates/sync`
+  — adding a new sync backend requires no changes to commands or CLI
 - Goal write-back: UI changes to goals are written to the `.md` file
   first, SQLite second — file is always authoritative
 - File watcher skips re-parsing files modified by the app itself
@@ -778,7 +765,7 @@ desktop app always reads from the config file.
   `tokio::sync::mpsc` for async bridge
 - `bundle.active: false` in `tauri.conf.json` for dev; autostart
   requires a bundled build
-- No authentication in Phase 1 — app opens directly to dashboard
+- No authentication — app opens directly to dashboard
 - `.quiet/` entries are never indexed, never sent to AI, never synced
   under any circumstances — this is enforced in the file watcher and
   the sync rebuild, not just the UI
