@@ -271,7 +271,7 @@ function MiniGraphCard({
   sub: string;
   total: number;
   onClick: () => void;
-  children: unknown;
+  children: React.ReactNode;
 }) {
   const [hov, setHov] = useState(false);
   return (
