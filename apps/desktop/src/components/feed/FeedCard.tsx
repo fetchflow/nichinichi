@@ -5,7 +5,7 @@ import { TYPE_COLORS } from "../../types";
 interface Props {
   entry: Entry;
   onDelete: (id: string) => void;
-  onEdit: (id: string, newBody: string, newDetail?: string) => Promise<void>;
+  onEdit: (id: string, newBody: string, newDetail?: string) => Promise<Entry>;
 }
 
 const TYPE_LABELS: Record<EntryType, string> = {
