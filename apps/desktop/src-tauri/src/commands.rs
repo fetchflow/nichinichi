@@ -1047,6 +1047,14 @@ pub async fn save_ai_config(
     let updated = replace_yaml_field(&updated, "provider", &provider);
 
     std::fs::write(&config_path, updated).map_err(|e| e.to_string())?;
+
+    // Keep settings table in sync so active_model reflects this save
+    sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES ('active_model', ?)")
+        .bind(&model)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
     Ok(())
 }
 

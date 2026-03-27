@@ -339,9 +339,11 @@ interface Props {
   onClose: () => void;
   onLoad: (messages: AiMessage[]) => void;
   onLayoutChange: (layout: "panel" | "half" | "full") => void;
+  activeModel: string;
+  onModelChange: (model: string) => void;
 }
 
-export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout, onAsk, onClear, onClose, onLoad, onLayoutChange }: Props) {
+export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout, onAsk, onClear, onClose, onLoad, onLayoutChange, activeModel, onModelChange }: Props) {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<AiConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -352,11 +354,20 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameInput, setRenameInput] = useState("");
   const [addedEntries, setAddedEntries] = useState<Set<string>>(new Set());
+  const [models, setModels] = useState<string[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    invoke<string[]>("get_models")
+      .then((list) => {
+        setModels(list);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -758,6 +769,22 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
               <polyline points="5 12 12 5 19 12" />
             </svg>
           </button>
+        </div>
+        <div className="mt-1.5 px-1">
+          <select
+            value={activeModel}
+            onChange={(e) => onModelChange(e.target.value)}
+            disabled={models.length === 0}
+            title={activeModel || "no model selected"}
+            className="text-xs bg-transparent text-gray-400 dark:text-gray-500 border-none outline-none cursor-pointer max-w-full truncate disabled:opacity-40"
+          >
+            {(models.length === 0 ? (activeModel ? [activeModel] : []) : models).map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+            {models.length > 0 && !models.includes(activeModel) && activeModel && (
+              <option value={activeModel}>{activeModel}</option>
+            )}
+          </select>
         </div>
       </div>
     </div>
