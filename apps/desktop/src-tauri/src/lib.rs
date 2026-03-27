@@ -94,6 +94,12 @@ async fn setup_app(app: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
     .execute(&pool)
     .await?;
 
+    // Seed active_model from yml default (INSERT OR IGNORE — won't overwrite user's choice)
+    sqlx::query("INSERT OR IGNORE INTO settings (key, value) VALUES ('active_model', ?)")
+        .bind(&config.ai.model)
+        .execute(&pool)
+        .await?;
+
     // Start file watcher
     let watcher_app = app.clone();
     start_file_watcher(
