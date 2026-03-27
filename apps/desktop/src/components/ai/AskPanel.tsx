@@ -468,20 +468,6 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
           <span className="text-xs font-semibold tracking-wide text-gray-500 dark:text-gray-400 uppercase shrink-0">
             Nichinichi
           </span>
-          <select
-            value={activeModel}
-            onChange={(e) => onModelChange(e.target.value)}
-            disabled={models.length === 0}
-            title={activeModel || "no model selected"}
-            className="text-xs bg-transparent text-gray-400 dark:text-gray-500 border-none outline-none cursor-pointer max-w-[120px] truncate disabled:opacity-40"
-          >
-            {(models.length === 0 ? (activeModel ? [activeModel] : []) : models).map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-            {models.length > 0 && !models.includes(activeModel) && activeModel && (
-              <option value={activeModel}>{activeModel}</option>
-            )}
-          </select>
         </div>
         <div className="flex items-center gap-1.5">
           <button
@@ -783,6 +769,22 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
               <polyline points="5 12 12 5 19 12" />
             </svg>
           </button>
+        </div>
+        <div className="mt-1.5 px-1">
+          <select
+            value={activeModel}
+            onChange={(e) => onModelChange(e.target.value)}
+            disabled={models.length === 0}
+            title={activeModel || "no model selected"}
+            className="text-xs bg-transparent text-gray-400 dark:text-gray-500 border-none outline-none cursor-pointer max-w-full truncate disabled:opacity-40"
+          >
+            {(models.length === 0 ? (activeModel ? [activeModel] : []) : models).map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+            {models.length > 0 && !models.includes(activeModel) && activeModel && (
+              <option value={activeModel}>{activeModel}</option>
+            )}
+          </select>
         </div>
       </div>
     </div>
