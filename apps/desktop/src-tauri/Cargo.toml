@@ -16,6 +16,7 @@ nichinichi-ai     = { workspace = true }
 tauri         = { workspace = true }
 tauri-plugin-autostart = { workspace = true }
 tauri-plugin-dialog    = { workspace = true }
+tauri-plugin-updater   = { workspace = true }
 anyhow        = { workspace = true }
 tokio         = { workspace = true }
 serde         = { workspace = true }
