@@ -88,6 +88,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
           tauriScript: pnpm tauri
@@ -130,3 +132,74 @@ jobs:
         run: |
           cp ${{ matrix.cli-binary }} ${{ matrix.cli-asset-name }}
           gh release upload ${{ github.ref_name }} ${{ matrix.cli-asset-name }} --clobber
+
+  publish-update:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=${TAG#v}
+
+          # Wait briefly for all assets to be attached (tauri-action uploads async)
+          sleep 10
+
+          ASSETS=$(gh release view "$TAG" --json assets -q '.assets')
+
+          get_url() {
+            echo "$ASSETS" | jq -r --arg n "$1" '.[] | select(.name | test($n)) | .url' | head -1
+          }
+          get_sig() {
+            URL=$(get_url "$1")
+            [ -z "$URL" ] && echo "" && return
+            curl -sL -H "Authorization: Bearer $GITHUB_TOKEN" "$URL"
+          }
+
+          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "See https://github.com/${{ github.repository }}/releases/tag/$TAG" \
+            --arg pub_date "$PUB_DATE" \
+            --arg darwin_aarch64_sig "$(get_sig 'Nichinichi.*aarch64.*\.sig$')" \
+            --arg darwin_aarch64_url "$(get_url 'Nichinichi.*aarch64.*\.tar\.gz$')" \
+            --arg darwin_x64_sig "$(get_sig 'Nichinichi.*x64.*\.sig$')" \
+            --arg darwin_x64_url "$(get_url 'Nichinichi.*x64.*\.tar\.gz$')" \
+            --arg linux_sig "$(get_sig 'nichinichi.*amd64.*\.AppImage\.sig$')" \
+            --arg linux_url "$(get_url 'nichinichi.*amd64.*\.AppImage$')" \
+            --arg windows_sig "$(get_sig 'Nichinichi.*x64.*setup\.exe\.sig$')" \
+            --arg windows_url "$(get_url 'Nichinichi.*x64.*setup\.exe$')" \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-aarch64": { signature: $darwin_aarch64_sig, url: $darwin_aarch64_url },
+                "darwin-x86_64":  { signature: $darwin_x64_sig,     url: $darwin_x64_url     },
+                "linux-x86_64":   { signature: $linux_sig,           url: $linux_url           },
+                "windows-x86_64": { signature: $windows_sig,         url: $windows_url         }
+              }
+            }' > latest.json
+
+          echo "Generated latest.json:"
+          cat latest.json
+
+      - name: Push latest.json to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages 2>/dev/null || true
+          git checkout --orphan gh-pages-deploy
+          git rm -rf . --quiet
+          cp latest.json .
+          git add latest.json
+          git commit -m "chore: update latest.json for ${{ github.ref_name }}"
+          git push origin HEAD:gh-pages --force
