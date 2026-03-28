@@ -236,6 +236,7 @@ export default function App() {
               onTabChange={ai.setActiveTabId}
               onNewTab={ai.newTab}
               onCloseTab={ai.closeTab}
+              onReorderTabs={ai.reorderTabs}
               loadedConv={ai.activeTab.loadedConv}
               onSetLoadedConv={ai.setLoadedConv}
             />

@@ -46,20 +46,24 @@ export function useAiTabs() {
   const [tabs, setTabs] = useState<AiTab[]>([initialTab]);
   const [activeTabId, setActiveTabIdState] = useState<string>(initialTab.id);
 
-  // Refs so SSE listeners always read the latest values without stale closures
+  // Refs so SSE listeners and ask() always read the latest values without stale closures
   const activeTabIdRef = useRef(activeTabId);
   const tabsRef = useRef(tabs);
+  // Tracks which tab initiated the current stream — NOT updated on tab switch,
+  // so chunks always land in the originating tab regardless of which tab is active.
+  const streamingTabIdRef = useRef<string | null>(null);
   useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
   useEffect(() => { tabsRef.current = tabs; }, [tabs]);
 
-  // SSE listeners — registered once, route to active tab via refs
+  // SSE listeners — registered once, route to the tab that started the stream
   useEffect(() => {
     let cancelled = false;
     let unlistenChunk: (() => void) | null = null;
     let unlistenDone: (() => void) | null = null;
 
     listen<string>("ai-chunk", (event) => {
-      const id = activeTabIdRef.current;
+      const id = streamingTabIdRef.current;
+      if (!id) return;
       setTabs((prev) =>
         prev.map((t) => {
           if (t.id !== id) return t;
@@ -80,7 +84,9 @@ export function useAiTabs() {
     });
 
     listen<string>("ai-done", (event) => {
-      const id = activeTabIdRef.current;
+      const id = streamingTabIdRef.current;
+      streamingTabIdRef.current = null;
+      if (!id) return;
       setTabs((prev) =>
         prev.map((t) => {
           if (t.id !== id) return t;
@@ -143,6 +149,10 @@ export function useAiTabs() {
       const tab = tabsRef.current.find((t) => t.id === id);
       const history = tab?.messages ?? [];
 
+      // Pin the streaming target — SSE events will route here even if the user
+      // switches to a different tab before the response completes.
+      streamingTabIdRef.current = id;
+
       setTabs((prev) =>
         prev.map((t) =>
           t.id === id
@@ -159,6 +169,7 @@ export function useAiTabs() {
           model: model ?? null,
         });
       } catch (e) {
+        streamingTabIdRef.current = null;
         setTabs((prev) =>
           prev.map((t) =>
             t.id === id
@@ -199,6 +210,18 @@ export function useAiTabs() {
     []
   );
 
+  const reorderTabs = useCallback((fromId: string, toId: string) => {
+    setTabs((prev) => {
+      const fromIdx = prev.findIndex((t) => t.id === fromId);
+      const toIdx = prev.findIndex((t) => t.id === toId);
+      if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+  }, []);
+
   const setLoadedConv = useCallback((conv: AiConversationSummary | null) => {
     const id = activeTabIdRef.current;
     setTabs((prev) =>
@@ -215,6 +238,7 @@ export function useAiTabs() {
     setActiveTabId,
     newTab,
     closeTab,
+    reorderTabs,
     ask,
     clear,
     loadConversation,

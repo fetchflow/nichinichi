@@ -341,15 +341,17 @@ interface Props {
   onTabChange: (id: string) => void;
   onNewTab: () => void;
   onCloseTab: (id: string) => void;
+  onReorderTabs: (fromId: string, toId: string) => void;
   loadedConv: AiConversationSummary | null;
   onSetLoadedConv: (conv: AiConversationSummary | null) => void;
 }
 
-export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout, onAsk, onClose, onLoad, onLayoutChange, activeModel, onModelChange, tabs, activeTabId, onTabChange, onNewTab, onCloseTab, loadedConv, onSetLoadedConv }: Props) {
+export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout, onAsk, onClose, onLoad, onLayoutChange, activeModel, onModelChange, tabs, activeTabId, onTabChange, onNewTab, onCloseTab, onReorderTabs, loadedConv, onSetLoadedConv }: Props) {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<AiConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showOverflow, setShowOverflow] = useState(false);
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState("");
@@ -529,12 +531,19 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
         {tabs.slice(0, MAX_VISIBLE_TABS).map((tab) => {
           const title = tabTitle(tab);
           const isActive = tab.id === activeTabId;
+          const isDragging = draggingTabId === tab.id;
           return (
             <button
               key={tab.id}
+              draggable
+              onDragStart={(e) => { setDraggingTabId(tab.id); e.dataTransfer.effectAllowed = "move"; }}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+              onDrop={(e) => { e.preventDefault(); if (draggingTabId && draggingTabId !== tab.id) onReorderTabs(draggingTabId, tab.id); setDraggingTabId(null); }}
+              onDragEnd={() => setDraggingTabId(null)}
               onClick={() => { onTabChange(tab.id); setShowHistory(false); }}
               title={title}
               className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs max-w-[90px] min-w-0 transition-colors group ${
+                isDragging ? "opacity-40" :
                 isActive
                   ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700"
                   : "text-gray-500 dark:text-gray-400 hover:bg-white/70 dark:hover:bg-gray-900/70 hover:text-gray-700 dark:hover:text-gray-300"
