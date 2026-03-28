@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -173,6 +174,16 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
       clicksRef.current = 0;
     }
   };
+
+  // Updates
+  const [currentVersion, setCurrentVersion] = useState("");
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [installing, setInstalling] = useState(false);
+
+  useEffect(() => {
+    getVersion().then(setCurrentVersion).catch(() => {});
+    invoke<string | null>("check_for_update").then(setUpdateVersion).catch(() => {});
+  }, []);
 
   // Rebuild — full wipe + re-walk from markdown
   const [rebuilding, setRebuilding] = useState(false);
@@ -593,6 +604,31 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
           <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
             Built-in tags (score, solution, decision, ai, reflection, log) are always available.
           </p>
+        </div>
+      </section>
+
+      {/* Updates */}
+      <section>
+        <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Updates</h2>
+        <div className="space-y-2">
+          {currentVersion && (
+            <p className="text-xs text-gray-500">Current version: {currentVersion}</p>
+          )}
+          {updateVersion ? (
+            <button
+              onClick={async () => {
+                setInstalling(true);
+                await invoke("install_update").catch(() => setInstalling(false));
+              }}
+              disabled={installing}
+              className="block w-full text-left px-3 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700
+                         disabled:opacity-50 text-sm text-gray-700 dark:text-gray-300 rounded transition-colors"
+            >
+              {installing ? "Installing…" : `Update to v${updateVersion} — Install & Restart`}
+            </button>
+          ) : (
+            <p className="text-xs text-gray-400 dark:text-gray-600">Up to date</p>
+          )}
         </div>
       </section>
     </div>
