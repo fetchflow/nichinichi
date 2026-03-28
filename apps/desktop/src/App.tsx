@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AskPanel } from "./components/ai/AskPanel";
 import { useActiveModel } from "./hooks/useActiveModel";
-import { useAi } from "./hooks/useAi";
+import { useAiTabs } from "./hooks/useAiTabs";
 import { useOrg } from "./hooks/useOrg";
 import { useSyncStatus } from "./hooks/useSyncStatus";
 import { useTheme } from "./hooks/useTheme";
@@ -47,7 +47,7 @@ export default function App() {
   const { theme, setTheme } = useTheme();
   const { activeOrg, setActiveOrg, orgs, workspaces, setWorkspaces } = useOrg();
   const { activeModel, setActiveModel } = useActiveModel();
-  const ai = useAi();
+  const ai = useAiTabs();
   const sync = useSyncStatus();
 
   // Tick every 30s to keep relative time display fresh
@@ -220,18 +220,24 @@ export default function App() {
             )}
             <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
             <AskPanel
-              messages={ai.messages}
-              streaming={ai.streaming}
+              messages={ai.activeTab.messages}
+              streaming={ai.activeTab.streaming}
               activeOrg={activeOrg}
               availableOrgs={orgs}
               layout={aiLayout}
               onAsk={(q) => ai.ask(q, activeOrg === "all" ? undefined : activeOrg, activeModel || undefined)}
-              onClear={ai.clear}
               onClose={() => { setAiOpen(false); setAiLayout("panel"); }}
               onLoad={ai.loadConversation}
               onLayoutChange={setAiLayout}
               activeModel={activeModel}
               onModelChange={setActiveModel}
+              tabs={ai.tabs}
+              activeTabId={ai.activeTabId}
+              onTabChange={ai.setActiveTabId}
+              onNewTab={ai.newTab}
+              onCloseTab={ai.closeTab}
+              loadedConv={ai.activeTab.loadedConv}
+              onSetLoadedConv={ai.setLoadedConv}
             />
             </div>
           </div>
