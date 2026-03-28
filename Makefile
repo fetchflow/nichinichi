@@ -1,4 +1,8 @@
-.PHONY: help install dev build build-desktop build-cli test test-parser test-sync cli
+.PHONY: help install dev build build-desktop build-cli test test-parser test-sync cli bump-version release
+
+RELEASE_VERSION ?=
+# Strip leading 'v' for version files (v0.2.0 → 0.2.0); evaluated lazily
+_VER = $(patsubst v%,%,$(RELEASE_VERSION))
 
 .DEFAULT_GOAL := help
 
@@ -44,3 +48,21 @@ test-parser: ## Run parser unit tests
 
 test-sync: ## Run sync + SQLite tests
 	cargo test -p nichinichi-sync
+
+# ── Release ────────────────────────────────────────────────────────────────────
+
+bump-version: ## Update version files from RELEASE_VERSION  (RELEASE_VERSION=vX.Y.Z required)
+	@test -n "$(RELEASE_VERSION)" || (echo "error: RELEASE_VERSION is required, e.g. RELEASE_VERSION=v0.2.0 make bump-version" && exit 1)
+	sed -i'' -e 's/^version = ".*"/version = "$(_VER)"/' Cargo.toml
+	cd apps/desktop && npm pkg set version=$(_VER)
+	cd apps/desktop/src-tauri && \
+	  tmp=$$(mktemp) && \
+	  jq '.version = "$(_VER)"' tauri.conf.json > $$tmp && \
+	  mv $$tmp tauri.conf.json
+
+release: bump-version ## Bump versions, commit, tag, and push  (RELEASE_VERSION=vX.Y.Z required)
+	cargo check
+	git add Cargo.toml apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json
+	git commit -m "chore: release $(RELEASE_VERSION)"
+	git tag $(RELEASE_VERSION)
+	git push origin HEAD $(RELEASE_VERSION)
