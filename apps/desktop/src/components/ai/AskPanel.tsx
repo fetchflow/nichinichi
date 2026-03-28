@@ -3,7 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { AiMessage } from "../../hooks/useAi";
+import type { AiConversationSummary, AiMessage, AiTab } from "../../hooks/useAiTabs";
+import { tabTitle } from "../../hooks/useAiTabs";
 
 function EntryBlock({ text, added, onAdded }: { text: string; added: boolean; onAdded: (key: string) => void }) {
   const [loading, setLoading] = useState(false);
@@ -320,13 +321,7 @@ function DigestBlock({ text, added, onAdded, orgs }: { text: string; added: bool
   );
 }
 
-interface AiConversationSummary {
-  id: string;
-  date: string;
-  query: string;
-  org: string | null;
-  file_path: string;
-}
+const MAX_VISIBLE_TABS = 3;
 
 interface Props {
   messages: AiMessage[];
@@ -335,19 +330,32 @@ interface Props {
   availableOrgs: string[];
   layout: "panel" | "half" | "full";
   onAsk: (query: string) => void;
-  onClear: () => void;
   onClose: () => void;
-  onLoad: (messages: AiMessage[]) => void;
+  onLoad: (messages: AiMessage[], conv: AiConversationSummary) => void;
   onLayoutChange: (layout: "panel" | "half" | "full") => void;
   activeModel: string;
   onModelChange: (model: string) => void;
+  // tab props
+  tabs: AiTab[];
+  activeTabId: string;
+  onTabChange: (id: string) => void;
+  onNewTab: () => void;
+  onCloseTab: (id: string) => void;
+  onReorderTabs: (fromId: string, toId: string) => void;
+  loadedConv: AiConversationSummary | null;
+  onSetLoadedConv: (conv: AiConversationSummary | null) => void;
 }
 
-export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout, onAsk, onClear, onClose, onLoad, onLayoutChange, activeModel, onModelChange }: Props) {
+export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout, onAsk, onClose, onLoad, onLayoutChange, activeModel, onModelChange, tabs, activeTabId, onTabChange, onNewTab, onCloseTab, onReorderTabs, loadedConv, onSetLoadedConv }: Props) {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<AiConversationSummary[]>([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [loadedConv, setLoadedConv] = useState<AiConversationSummary | null>(null);
+  const [showOverflow, setShowOverflow] = useState(false);
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
+  const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const tabInputsRef = useRef<Map<string, string>>(new Map());
+  const prevTabIdRef = useRef<string>(activeTabId);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState("");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
@@ -363,12 +371,34 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
   }, []);
 
   useEffect(() => {
+    if (!showOverflow) return;
+    const handler = (e: MouseEvent) => {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflow(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showOverflow]);
+
+  useEffect(() => {
     invoke<string[]>("get_models")
       .then((list) => {
         setModels(list);
       })
       .catch(() => {});
   }, []);
+
+  // Per-tab input preservation: save outgoing, restore incoming on tab switch
+  useEffect(() => {
+    const prev = prevTabIdRef.current;
+    if (prev === activeTabId) return;
+    tabInputsRef.current.set(prev, input);
+    const saved = tabInputsRef.current.get(activeTabId) ?? "";
+    setInput(saved);
+    if (inputRef.current) inputRef.current.style.height = "auto";
+    prevTabIdRef.current = activeTabId;
+  }, [activeTabId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
@@ -388,6 +418,7 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
     setShowHistory(false);
     onAsk(q);
     setInput("");
+    tabInputsRef.current.delete(activeTabId);
     // reset textarea height
     if (inputRef.current) inputRef.current.style.height = "auto";
   };
@@ -423,8 +454,7 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
       const loaded = await invoke<AiMessage[]>("load_ai_conversation_cmd", {
         filePath: conv.file_path,
       });
-      onLoad(loaded);
-      setLoadedConv(conv);
+      onLoad(loaded, conv);
       setShowHistory(false);
     } catch {
       // ignore load errors
@@ -455,7 +485,7 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
       await invoke("retitle_ai_conversation_cmd", { filePath: conv.file_path, title }).catch(() => {});
       refreshHistory();
       // Keep the pinned title in sync if this is the active conversation
-      if (loadedConv?.id === conv.id) setLoadedConv({ ...conv, query: title });
+      if (loadedConv?.id === conv.id) onSetLoadedConv({ ...conv, query: title });
     }
     setRenamingId(null);
   };
@@ -463,22 +493,11 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
   return (
     <div className="flex flex-col h-full border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200 dark:border-gray-800">
-        <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-          <span className="text-xs font-semibold tracking-wide text-gray-500 dark:text-gray-400 uppercase shrink-0">
-            Nichinichi
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => { onClear(); setLoadedConv(null); setShowHistory(false); inputRef.current?.focus(); }}
-            title="New chat"
-            className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800">
+        <span className="text-xs font-semibold tracking-wide text-gray-400 dark:text-gray-500 uppercase shrink-0">
+          Nichinichi
+        </span>
+        <div className="flex items-center gap-1">
           {history.length > 0 && (
             <button
               onClick={() => setShowHistory((v) => !v)}
@@ -498,41 +517,153 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
           <button
             onClick={() => onLayoutChange(layout === "half" ? "panel" : "half")}
             title={layout === "half" ? "Restore panel" : "Half screen"}
-            className={`p-1 rounded transition-colors ${
-              layout === "half"
-                ? "text-amber-500 bg-amber-50 dark:bg-amber-900/20"
-                : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-            }`}
+            className={`p-1 rounded transition-colors ${layout === "half" ? "text-amber-500 bg-amber-50 dark:bg-amber-900/20" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="1" />
-              <line x1="12" y1="3" x2="12" y2="21" />
+              <rect x="3" y="3" width="18" height="18" rx="1" /><line x1="12" y1="3" x2="12" y2="21" />
             </svg>
           </button>
           <button
             onClick={() => onLayoutChange(layout === "full" ? "panel" : "full")}
             title={layout === "full" ? "Restore panel" : "Full screen"}
-            className={`p-1 rounded transition-colors ${
-              layout === "full"
-                ? "text-amber-500 bg-amber-50 dark:bg-amber-900/20"
-                : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-            }`}
+            className={`p-1 rounded transition-colors ${layout === "full" ? "text-amber-500 bg-amber-50 dark:bg-amber-900/20" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="1" />
             </svg>
           </button>
-          <button
-            onClick={onClose}
-            title="Close"
-            className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
+          <button onClick={onClose} title="Close" className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex items-center gap-0.5 px-2 py-1 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 relative">
+        {/* Visible tabs */}
+        {tabs.slice(0, MAX_VISIBLE_TABS).map((tab) => {
+          const title = tabTitle(tab);
+          const isActive = tab.id === activeTabId;
+          const isDragging = draggingTabId === tab.id;
+          return (
+            <button
+              key={tab.id}
+              draggable
+              onDragStart={(e) => {
+                setDraggingTabId(tab.id);
+                e.dataTransfer.setData("text/plain", tab.id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDragOverTabId(tab.id);
+              }}
+              onDragLeave={() => setDragOverTabId(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                const fromId = e.dataTransfer.getData("text/plain");
+                if (fromId && fromId !== tab.id) onReorderTabs(fromId, tab.id);
+                setDraggingTabId(null);
+                setDragOverTabId(null);
+              }}
+              onDragEnd={() => { setDraggingTabId(null); setDragOverTabId(null); }}
+              onClick={() => { onTabChange(tab.id); setShowHistory(false); }}
+              title={title}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs max-w-[90px] min-w-0 transition-colors group ${
+                isDragging ? "opacity-40" :
+                dragOverTabId === tab.id && draggingTabId !== tab.id ? "ring-1 ring-amber-400" :
+                isActive
+                  ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700"
+                  : "text-gray-500 dark:text-gray-400 hover:bg-white/70 dark:hover:bg-gray-900/70 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              <span className="truncate flex-1 min-w-0">{title}</span>
+              {tab.unread && (
+                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500" />
+              )}
+              {tabs.length > 1 && (
+                <span
+                  role="button"
+                  onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
+                  className={`shrink-0 rounded p-0.5 transition-colors ${
+                    isActive
+                      ? "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      : "opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  }`}
+                >
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </span>
+              )}
+            </button>
+          );
+        })}
+
+        {/* New tab button */}
+        <button
+          onClick={() => { onNewTab(); setShowHistory(false); inputRef.current?.focus(); }}
+          title="New chat"
+          className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-gray-900 transition-colors shrink-0"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+
+        {/* Overflow button — shown when there are more tabs than visible */}
+        {tabs.length > MAX_VISIBLE_TABS && (
+          <div ref={overflowRef} className="relative ml-auto shrink-0">
+            <button
+              onClick={() => setShowOverflow((v) => !v)}
+              title="More tabs"
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors ${
+                showOverflow
+                  ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+                  : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-gray-900"
+              }`}
+            >
+              <span className="font-medium tabular-nums">{tabs.length - MAX_VISIBLE_TABS}</span>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            {showOverflow && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px] max-w-[220px]">
+                {tabs.slice(MAX_VISIBLE_TABS).map((tab) => {
+                  const title = tabTitle(tab);
+                  const isActive = tab.id === activeTabId;
+                  return (
+                    <div key={tab.id} className="flex items-center gap-1 px-2 py-1 group">
+                      <button
+                        onClick={() => { onTabChange(tab.id); setShowOverflow(false); setShowHistory(false); }}
+                        className={`flex-1 text-left text-xs truncate transition-colors flex items-center gap-1.5 ${
+                          isActive ? "text-amber-600 dark:text-amber-400 font-medium" : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                        }`}
+                      >
+                        <span className="truncate flex-1">{title}</span>
+                        {tab.unread && (
+                          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => { onCloseTab(tab.id); }}
+                        className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                      >
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* History list */}
@@ -615,7 +746,7 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
               setEditingTitle(false);
               if (!next || next === title || !loadedConv) return;
               await invoke("retitle_ai_conversation_cmd", { filePath: loadedConv.file_path, title: next }).catch(() => {});
-              setLoadedConv({ ...loadedConv, query: next });
+              onSetLoadedConv({ ...loadedConv, query: next });
               refreshHistory();
             };
 
