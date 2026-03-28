@@ -40,5 +40,14 @@
     "security": {
       "csp": null
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "PLACEHOLDER — replace with contents of nichinichi.key.pub after running: npx tauri signer generate -w ~/.tauri/nichinichi.key",
+      "endpoints": [
+        "https://fetchflow.github.io/nichinichi/latest.json"
+      ],
+      "dialog": false
+    }
   }
 }
