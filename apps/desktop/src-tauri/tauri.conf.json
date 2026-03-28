@@ -43,7 +43,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "PLACEHOLDER — replace with contents of nichinichi.key.pub after running: npx tauri signer generate -w ~/.tauri/nichinichi.key",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY4QUQ2NDM0NkVBNkZGOTQKUldTVS82WnVOR1N0K0xJbTQ4c3V2bEdEWkVaMTE4Z2c1Q3VpUE9LTmhWN3JlS08wQWVGdGJ0MWMK",
       "endpoints": [
         "https://fetchflow.github.io/nichinichi/latest.json"
       ],
