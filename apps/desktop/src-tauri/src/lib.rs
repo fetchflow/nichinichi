@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -70,6 +71,8 @@ pub fn run() {
             commands::create_playbook_from_ai,
             commands::save_digest_from_ai,
             commands::get_setup_status,
+            commands::check_for_update,
+            commands::install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
