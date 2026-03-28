@@ -21,6 +21,7 @@ export interface AiTab {
   streaming: boolean;
   loadedConv: AiConversationSummary | null;
   org: string | null;
+  unread: boolean;
 }
 
 function makeTab(): AiTab {
@@ -30,6 +31,7 @@ function makeTab(): AiTab {
     streaming: false,
     loadedConv: null,
     org: null,
+    unread: false,
   };
 }
 
@@ -100,7 +102,8 @@ export function useAiTabs() {
               org: t.org ?? null,
             }).catch(() => {});
           }
-          return { ...t, messages: allMessages, streaming: false };
+          const isBackground = id !== activeTabIdRef.current;
+          return { ...t, messages: allMessages, streaming: false, unread: isBackground };
         })
       );
     }).then((fn) => {
@@ -118,6 +121,7 @@ export function useAiTabs() {
   const setActiveTabId = useCallback((id: string) => {
     setActiveTabIdState(id);
     activeTabIdRef.current = id;
+    setTabs((prev) => prev.map((t) => t.id === id ? { ...t, unread: false } : t));
   }, []);
 
   const newTab = useCallback(() => {

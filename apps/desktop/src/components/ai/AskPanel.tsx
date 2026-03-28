@@ -352,7 +352,10 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
   const [showHistory, setShowHistory] = useState(false);
   const [showOverflow, setShowOverflow] = useState(false);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
+  const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const tabInputsRef = useRef<Map<string, string>>(new Map());
+  const prevTabIdRef = useRef<string>(activeTabId);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState("");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
@@ -386,6 +389,17 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
       .catch(() => {});
   }, []);
 
+  // Per-tab input preservation: save outgoing, restore incoming on tab switch
+  useEffect(() => {
+    const prev = prevTabIdRef.current;
+    if (prev === activeTabId) return;
+    tabInputsRef.current.set(prev, input);
+    const saved = tabInputsRef.current.get(activeTabId) ?? "";
+    setInput(saved);
+    if (inputRef.current) inputRef.current.style.height = "auto";
+    prevTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
   }, [messages]);
@@ -404,6 +418,7 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
     setShowHistory(false);
     onAsk(q);
     setInput("");
+    tabInputsRef.current.delete(activeTabId);
     // reset textarea height
     if (inputRef.current) inputRef.current.style.height = "auto";
   };
@@ -536,20 +551,39 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
             <button
               key={tab.id}
               draggable
-              onDragStart={(e) => { setDraggingTabId(tab.id); e.dataTransfer.effectAllowed = "move"; }}
-              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
-              onDrop={(e) => { e.preventDefault(); if (draggingTabId && draggingTabId !== tab.id) onReorderTabs(draggingTabId, tab.id); setDraggingTabId(null); }}
-              onDragEnd={() => setDraggingTabId(null)}
+              onDragStart={(e) => {
+                setDraggingTabId(tab.id);
+                e.dataTransfer.setData("text/plain", tab.id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDragOverTabId(tab.id);
+              }}
+              onDragLeave={() => setDragOverTabId(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                const fromId = e.dataTransfer.getData("text/plain");
+                if (fromId && fromId !== tab.id) onReorderTabs(fromId, tab.id);
+                setDraggingTabId(null);
+                setDragOverTabId(null);
+              }}
+              onDragEnd={() => { setDraggingTabId(null); setDragOverTabId(null); }}
               onClick={() => { onTabChange(tab.id); setShowHistory(false); }}
               title={title}
               className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs max-w-[90px] min-w-0 transition-colors group ${
                 isDragging ? "opacity-40" :
+                dragOverTabId === tab.id && draggingTabId !== tab.id ? "ring-1 ring-amber-400" :
                 isActive
                   ? "bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700"
                   : "text-gray-500 dark:text-gray-400 hover:bg-white/70 dark:hover:bg-gray-900/70 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
             >
               <span className="truncate flex-1 min-w-0">{title}</span>
+              {tab.unread && (
+                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500" />
+              )}
               {tabs.length > 1 && (
                 <span
                   role="button"
@@ -606,11 +640,14 @@ export function AskPanel({ messages, streaming, activeOrg, availableOrgs, layout
                     <div key={tab.id} className="flex items-center gap-1 px-2 py-1 group">
                       <button
                         onClick={() => { onTabChange(tab.id); setShowOverflow(false); setShowHistory(false); }}
-                        className={`flex-1 text-left text-xs truncate transition-colors ${
+                        className={`flex-1 text-left text-xs truncate transition-colors flex items-center gap-1.5 ${
                           isActive ? "text-amber-600 dark:text-amber-400 font-medium" : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                         }`}
                       >
-                        {title}
+                        <span className="truncate flex-1">{title}</span>
+                        {tab.unread && (
+                          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500" />
+                        )}
                       </button>
                       <button
                         onClick={() => { onCloseTab(tab.id); }}
