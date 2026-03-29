@@ -18,6 +18,7 @@ pub fn load_config(start_dir: Option<&Path>) -> Result<Config, ParseError> {
             editor: std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string()),
             ai: AiConfig::default(),
             default_org: None,
+            cloud: None,
             project_org: None,
         }
     };
@@ -99,6 +100,7 @@ fn config_from_yaml(raw: &serde_yaml::Value, home: &Path) -> Config {
         editor,
         ai,
         default_org,
+        cloud: None,
         project_org: None,
     }
 }

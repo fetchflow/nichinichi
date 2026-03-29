@@ -98,6 +98,7 @@ mod tests {
             editor: "vim".to_string(),
             ai: Default::default(),
             default_org: None,
+            cloud: None,
             project_org: None,
         }
     }
