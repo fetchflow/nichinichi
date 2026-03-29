@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AskPanel } from "./components/ai/AskPanel";
 import { useActiveModel } from "./hooks/useActiveModel";
 import { useAiTabs } from "./hooks/useAiTabs";
+import { useFontSize } from "./hooks/useFontSize";
 import { useOrg } from "./hooks/useOrg";
 import { useSyncStatus } from "./hooks/useSyncStatus";
 import { useTheme } from "./hooks/useTheme";
@@ -45,7 +46,20 @@ export default function App() {
   const [aiLayout, setAiLayout] = useState<"panel" | "half" | "full">("panel");
   const isResizing = useRef(false);
   const { theme, setTheme } = useTheme();
+  const { increase: fontIncrease, decrease: fontDecrease, reset: fontReset } = useFontSize();
   const { activeOrg, setActiveOrg, orgs, workspaces, setWorkspaces } = useOrg();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === "=" || e.key === "+") { e.preventDefault(); fontIncrease(); }
+      else if (e.key === "-") { e.preventDefault(); fontDecrease(); }
+      else if (e.key === "0") { e.preventDefault(); fontReset(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [fontIncrease, fontDecrease, fontReset]);
   const { activeModel, setActiveModel } = useActiveModel();
   const ai = useAiTabs();
   const sync = useSyncStatus();
