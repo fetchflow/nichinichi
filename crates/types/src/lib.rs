@@ -6,7 +6,7 @@ pub mod playbook;
 pub mod digest;
 
 pub use ai::ChatMessage;
-pub use config::{AiConfig, AiProvider, Config};
+pub use config::{AiConfig, AiProvider, CloudConfig, Config};
 pub use entry::{EntryType, OrgScope, ParsedEntry};
 pub use goal::{Goal, GoalProgress, GoalStatus, GoalStep, GoalStepStatus, GoalType, ProgressSignal};
 pub use playbook::Playbook;
