@@ -1,10 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getVersion } from "@tauri-apps/api/app";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { Theme } from "../hooks/useTheme";
 import { useTimezone, systemTimezone } from "../hooks/useTimezone";
+import type { CloudStatus } from "../types";
 
 interface Props {
   theme: Theme;
@@ -184,6 +186,79 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
     getVersion().then(setCurrentVersion).catch(() => {});
     invoke<string | null>("check_for_update").then(setUpdateVersion).catch(() => {});
   }, []);
+
+  // Cloud sync
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus | null>(null);
+  const [cloudEmail, setCloudEmail] = useState("");
+  const [cloudPassword, setCloudPassword] = useState("");
+  const [cloudSigningIn, setCloudSigningIn] = useState(false);
+  const [cloudError, setCloudError] = useState("");
+  const [cloudSyncing, setCloudSyncing] = useState(false);
+  const [cloudSyncMsg, setCloudSyncMsg] = useState("");
+
+  const loadCloudStatus = () => {
+    invoke<CloudStatus>("get_cloud_status")
+      .then(setCloudStatus)
+      .catch(() => setCloudStatus(null));
+  };
+
+  useEffect(() => {
+    loadCloudStatus();
+    const unlisten = listen("cloud-sync-update", loadCloudStatus);
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  const handleCloudSignIn = async (e: FormEvent) => {
+    e.preventDefault();
+    setCloudSigningIn(true);
+    setCloudError("");
+    try {
+      await invoke("cloud_sign_in", { email: cloudEmail, password: cloudPassword });
+      setCloudEmail("");
+      setCloudPassword("");
+      loadCloudStatus();
+    } catch (err) {
+      setCloudError(String(err));
+    } finally {
+      setCloudSigningIn(false);
+    }
+  };
+
+  const handleCloudSignOut = async () => {
+    await invoke("cloud_sign_out").catch(() => {});
+    setCloudStatus(null);
+  };
+
+  const handleCloudSyncNow = async () => {
+    setCloudSyncing(true);
+    setCloudSyncMsg("");
+    try {
+      const result = await invoke<{ uploaded: number; downloaded: number; conflicts: unknown[] }>("cloud_sync_now");
+      setCloudSyncMsg(`Synced — ${result.uploaded} uploaded, ${result.downloaded} downloaded`);
+      setTimeout(() => setCloudSyncMsg(""), 3000);
+      loadCloudStatus();
+    } catch (err) {
+      setCloudSyncMsg(String(err));
+      setTimeout(() => setCloudSyncMsg(""), 4000);
+    } finally {
+      setCloudSyncing(false);
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const formatRelativeTime = (ts: number | null) => {
+    if (!ts) return "Never";
+    const diff = Math.floor(Date.now() / 1000) - ts;
+    if (diff < 60) return "just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+    return `${Math.floor(diff / 86400)} days ago`;
+  };
 
   // Rebuild — full wipe + re-walk from markdown
   const [rebuilding, setRebuilding] = useState(false);
@@ -604,6 +679,105 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
           <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
             Built-in tags (score, solution, decision, ai, reflection, log) are always available.
           </p>
+        </div>
+      </section>
+
+      {/* Cloud Sync */}
+      <section>
+        <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Cloud Sync</h2>
+        <div className="space-y-3">
+          {!cloudStatus?.signed_in ? (
+            <form onSubmit={handleCloudSignIn} className="space-y-2">
+              <input
+                type="email"
+                value={cloudEmail}
+                onChange={(e) => setCloudEmail(e.target.value)}
+                placeholder="Email"
+                required
+                className="w-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                           border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
+              />
+              <input
+                type="password"
+                value={cloudPassword}
+                onChange={(e) => setCloudPassword(e.target.value)}
+                placeholder="Password"
+                required
+                className="w-full bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded px-2 py-1
+                           border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500"
+              />
+              {cloudError && (
+                <p className="text-xs text-red-500">{cloudError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={cloudSigningIn}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm rounded transition-colors"
+              >
+                {cloudSigningIn ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  cloudStatus.plan === "pro" || cloudStatus.plan === "team"
+                    ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                }`}>
+                  {cloudStatus.plan.charAt(0).toUpperCase() + cloudStatus.plan.slice(1)}
+                </span>
+                <span className="text-xs text-gray-500">{cloudStatus.plan_status}</span>
+              </div>
+              <p className="text-xs text-gray-500">
+                {cloudStatus.synced_files} files synced &bull; {formatBytes(cloudStatus.storage_used_bytes)}
+              </p>
+              <p className="text-xs text-gray-500">
+                Last synced: {formatRelativeTime(cloudStatus.last_synced_at)}
+              </p>
+              {cloudSyncMsg && (
+                <p className="text-xs text-gray-500">{cloudSyncMsg}</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleCloudSyncNow}
+                  disabled={cloudSyncing}
+                  className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50
+                             text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+                >
+                  {cloudSyncing ? "Syncing…" : "Sync Now"}
+                </button>
+                {(cloudStatus.plan === "pro" || cloudStatus.plan === "team") ? (
+                  <button
+                    onClick={async () => {
+                      const url = await invoke<string>("get_billing_portal_url").catch(() => "");
+                      if (url) window.open(url, "_blank");
+                    }}
+                    className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600
+                               text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
+                  >
+                    Manage Subscription
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      const url = await invoke<string>("get_billing_checkout_url").catch(() => "");
+                      if (url) window.open(url, "_blank");
+                    }}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded transition-colors"
+                  >
+                    Upgrade to Pro
+                  </button>
+                )}
+                <button
+                  onClick={handleCloudSignOut}
+                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors self-center"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

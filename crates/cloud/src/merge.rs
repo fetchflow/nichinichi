@@ -60,37 +60,6 @@ pub fn merge_entry(
     }
 }
 
-/// Diff two manifest ID sets and return:
-/// - `to_pull`: IDs present on remote but absent locally, or newer on remote.
-/// - `to_push`: IDs present locally but absent on remote.
-pub fn diff_manifests(
-    local_ids: &std::collections::HashMap<String, String>,
-    remote_manifest: &[crate::manifest::ManifestEntry],
-) -> (Vec<String>, Vec<String>) {
-    let mut to_pull: Vec<String> = Vec::new();
-    let mut remote_id_set: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
-
-    for remote in remote_manifest {
-        remote_id_set.insert(remote.id.clone());
-        match local_ids.get(&remote.id) {
-            None => to_pull.push(remote.id.clone()),
-            Some(local_ts) if local_ts.as_str() < remote.updated_at.as_str() => {
-                to_pull.push(remote.id.clone());
-            }
-            _ => {}
-        }
-    }
-
-    let to_push: Vec<String> = local_ids
-        .keys()
-        .filter(|id| !remote_id_set.contains(*id))
-        .cloned()
-        .collect();
-
-    (to_pull, to_push)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,31 +139,4 @@ mod tests {
         assert!(matches!(result, Err(CloudError::MergeConflict { .. })));
     }
 
-    #[test]
-    fn test_diff_manifests() {
-        use crate::manifest::{ManifestEntry, ManifestKind};
-
-        let mut local: HashMap<String, String> = HashMap::new();
-        local.insert("id-local-only".to_string(), "2026-01-01T00:00:00".to_string());
-        local.insert("id-both".to_string(), "2026-01-01T00:00:00".to_string());
-
-        let remote = vec![
-            ManifestEntry {
-                id: "id-both".to_string(),
-                updated_at: "2026-01-02T00:00:00".to_string(),
-                kind: ManifestKind::Entry,
-            },
-            ManifestEntry {
-                id: "id-remote-only".to_string(),
-                updated_at: "2026-01-01T00:00:00".to_string(),
-                kind: ManifestKind::Entry,
-            },
-        ];
-
-        let (to_pull, to_push) = diff_manifests(&local, &remote);
-
-        assert!(to_pull.contains(&"id-both".to_string()));
-        assert!(to_pull.contains(&"id-remote-only".to_string()));
-        assert_eq!(to_push, vec!["id-local-only".to_string()]);
-    }
 }
