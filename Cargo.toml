@@ -5,6 +5,7 @@ members = [
     "crates/parser",
     "crates/sync",
     "crates/ai",
+    "crates/cloud",
     "apps/cli",
     "apps/desktop/src-tauri",
 ]
@@ -34,9 +35,10 @@ sqlx             = { version = "0.8", features = ["sqlite", "runtime-tokio", "ch
 notify           = "6"
 notify-debouncer-mini = "0.4"
 
-# ai
+# ai / cloud
 reqwest          = { version = "0.12", features = ["json", "stream"] }
 futures          = "0.3"
+hex              = "0.4"
 
 # cli
 clap             = { version = "4", features = ["derive"] }
@@ -56,3 +58,4 @@ nichinichi-types     = { path = "crates/types" }
 nichinichi-parser    = { path = "crates/parser" }
 nichinichi-sync      = { path = "crates/sync" }
 nichinichi-ai        = { path = "crates/ai" }
+nichinichi-cloud     = { path = "crates/cloud" }

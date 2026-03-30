@@ -1,0 +1,17 @@
+[package]
+name = "nichinichi-cloud"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nichinichi-types    = { workspace = true }
+serde               = { workspace = true }
+serde_json          = { workspace = true }
+tokio               = { workspace = true }
+thiserror           = { workspace = true }
+chrono              = { workspace = true }
+reqwest             = { workspace = true }
+async-trait         = { workspace = true }
+sha2                = { workspace = true }
+hex                 = "0.4"
