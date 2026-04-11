@@ -8,6 +8,7 @@ use nichinichi_types::Config;
 
 use crate::error::CloudError;
 use crate::manifest::{sha256_hex, FileManifest};
+use crate::merge::merge_daily_file;
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -55,6 +56,9 @@ pub struct AccountStatus {
 pub struct SyncResult {
     pub uploaded: usize,
     pub downloaded: usize,
+    /// Conflicts that were auto-resolved (daily: union merge; other: remote wins).
+    pub resolved: usize,
+    /// Conflicts that could not be resolved (e.g. network failure during resolution).
     pub conflicts: Vec<ConflictItem>,
 }
 
@@ -323,15 +327,78 @@ impl CloudClient {
             }
         }
 
+        // Resolve conflicts: daily files get a union merge; all others fall
+        // back to remote-wins (structured files like goals/playbooks are
+        // safer to overwrite locally than to produce a garbled merge).
+        let mut resolved = 0usize;
+        let mut unresolved: Vec<ConflictItem> = Vec::new();
+
+        for item in response.conflicts {
+            let local_path = repo.join(&item.path);
+
+            let local_bytes = match std::fs::read(&local_path) {
+                Ok(b) => b,
+                Err(_) => { unresolved.push(item); continue; }
+            };
+            let remote_bytes = match self.pull_file(&item.path).await {
+                Ok(b) => b,
+                Err(_) => { unresolved.push(item); continue; }
+            };
+
+            let merged_bytes = if is_daily_path(&item.path) {
+                let local_str = String::from_utf8_lossy(&local_bytes);
+                let remote_str = String::from_utf8_lossy(&remote_bytes);
+                merge_daily_file(&local_str, &remote_str).into_bytes()
+            } else {
+                remote_bytes
+            };
+
+            if let Some(parent) = local_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let write_ok = std::fs::write(&local_path, &merged_bytes).is_ok();
+
+            if write_ok {
+                match self.resolve_conflict(&item.path, merged_bytes.clone()).await {
+                    Ok(()) => {
+                        manifest.update(&item.path, &merged_bytes);
+                        resolved += 1;
+                    }
+                    Err(_) => { unresolved.push(item); }
+                }
+            } else {
+                unresolved.push(item);
+            }
+        }
+
         manifest.last_sync_at = Some(Utc::now());
         let _ = manifest.save(repo);
 
         Ok(SyncResult {
             uploaded,
             downloaded,
-            conflicts: response.conflicts,
+            resolved,
+            conflicts: unresolved,
         })
     }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Returns true if `rel` names a daily entry file (`YYYY-MM-DD.md`).
+/// Works for root-level files and archived ones (`archive/2025/2025-01-03.md`).
+fn is_daily_path(rel: &str) -> bool {
+    let name = Path::new(rel)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    name.len() == 13
+        && name.ends_with(".md")
+        && name.as_bytes()[4] == b'-'
+        && name.as_bytes()[7] == b'-'
+        && name[..4].bytes().all(|b| b.is_ascii_digit())
+        && name[5..7].bytes().all(|b| b.is_ascii_digit())
+        && name[8..10].bytes().all(|b| b.is_ascii_digit())
 }
 
 // ── Repo walker ───────────────────────────────────────────────────────────────

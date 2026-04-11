@@ -2022,6 +2022,7 @@ pub struct CloudStatus {
 pub struct CloudSyncResult {
     pub uploaded: usize,
     pub downloaded: usize,
+    pub resolved: usize,
     pub conflicts: Vec<CloudConflict>,
 }
 
@@ -2100,6 +2101,7 @@ pub async fn cloud_sync_now(
     Ok(CloudSyncResult {
         uploaded: result.uploaded,
         downloaded: result.downloaded,
+        resolved: result.resolved,
         conflicts: result
             .conflicts
             .into_iter()
