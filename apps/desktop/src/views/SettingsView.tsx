@@ -195,6 +195,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
   const [cloudError, setCloudError] = useState("");
   const [cloudSyncing, setCloudSyncing] = useState(false);
   const [cloudSyncMsg, setCloudSyncMsg] = useState("");
+  const [cloudMode, setCloudMode] = useState<"signin" | "register">("signin");
 
   const loadCloudStatus = () => {
     invoke<CloudStatus>("get_cloud_status")
@@ -208,12 +209,13 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
-  const handleCloudSignIn = async (e: FormEvent) => {
+  const handleCloudAuth = async (e: FormEvent) => {
     e.preventDefault();
     setCloudSigningIn(true);
     setCloudError("");
     try {
-      await invoke("cloud_sign_in", { email: cloudEmail, password: cloudPassword });
+      const cmd = cloudMode === "register" ? "cloud_register" : "cloud_sign_in";
+      await invoke(cmd, { email: cloudEmail, password: cloudPassword });
       setCloudEmail("");
       setCloudPassword("");
       loadCloudStatus();
@@ -687,7 +689,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
         <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Cloud Sync</h2>
         <div className="space-y-3">
           {!cloudStatus?.signed_in ? (
-            <form onSubmit={handleCloudSignIn} className="space-y-2">
+            <form onSubmit={handleCloudAuth} className="space-y-2">
               <input
                 type="email"
                 value={cloudEmail}
@@ -709,13 +711,24 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
               {cloudError && (
                 <p className="text-xs text-red-500">{cloudError}</p>
               )}
-              <button
-                type="submit"
-                disabled={cloudSigningIn}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm rounded transition-colors"
-              >
-                {cloudSigningIn ? "Signing in…" : "Sign in"}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={cloudSigningIn}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm rounded transition-colors"
+                >
+                  {cloudSigningIn
+                    ? cloudMode === "register" ? "Creating account…" : "Signing in…"
+                    : cloudMode === "register" ? "Create account" : "Sign in"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCloudMode(m => m === "signin" ? "register" : "signin"); setCloudError(""); }}
+                  className="text-xs text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                >
+                  {cloudMode === "signin" ? "Create account" : "Sign in instead"}
+                </button>
+              </div>
             </form>
           ) : (
             <div className="space-y-2">
@@ -751,7 +764,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
                   <button
                     onClick={async () => {
                       const url = await invoke<string>("get_billing_portal_url").catch(() => "");
-                      if (url) window.open(url, "_blank");
+                      if (url) await invoke("open_external_url", { url }).catch(() => {});
                     }}
                     className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600
                                text-gray-800 dark:text-gray-200 text-sm rounded transition-colors"
@@ -762,7 +775,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
                   <button
                     onClick={async () => {
                       const url = await invoke<string>("get_billing_checkout_url").catch(() => "");
-                      if (url) window.open(url, "_blank");
+                      if (url) await invoke("open_external_url", { url }).catch(() => {});
                     }}
                     className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded transition-colors"
                   >

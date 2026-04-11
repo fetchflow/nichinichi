@@ -2181,6 +2181,39 @@ pub async fn get_billing_portal_url(
     client.get_portal_url().await.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub async fn cloud_register(
+    base_url: String,
+    email: String,
+    password: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let token = CloudClient::register(&base_url, &email, &password)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut state = state.lock().await;
+    if let Some(cloud) = state.config.cloud.as_mut() {
+        cloud.token = token.clone();
+        cloud.base_url = base_url.clone();
+    } else {
+        state.config.cloud = Some(nichinichi_types::CloudConfig {
+            base_url: base_url.clone(),
+            token: token.clone(),
+            last_synced_at: None,
+            conflict_strategy: "remote_wins".to_string(),
+        });
+    }
+    state.cloud_client = CloudClient::from_config(&state.config).ok().map(Arc::new);
+    persist_cloud_token(&base_url, &token)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    open::that(&url).map_err(|e| e.to_string())
+}
+
 // ── Cloud config persistence ──────────────────────────────────────────────
 
 fn persist_cloud_token(base_url: &str, token: &str) -> Result<(), String> {

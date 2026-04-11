@@ -76,11 +76,13 @@ pub fn run() {
             commands::check_for_update,
             commands::install_update,
             commands::cloud_sign_in,
+            commands::cloud_register,
             commands::cloud_sign_out,
             commands::cloud_sync_now,
             commands::get_cloud_status,
             commands::get_billing_checkout_url,
             commands::get_billing_portal_url,
+            commands::open_external_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
