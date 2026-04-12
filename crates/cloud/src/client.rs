@@ -1,16 +1,69 @@
-use reqwest::{Client, StatusCode};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use std::path::Path;
 
-use nichinichi_types::{AiConversation, Config, Digest, Goal, ParsedEntry, Playbook};
+use chrono::{DateTime, Utc};
+use reqwest::{Client, StatusCode};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+use nichinichi_types::Config;
 
 use crate::error::CloudError;
-use crate::manifest::{ManifestQuery, SyncManifest};
+use crate::manifest::{sha256_hex, FileManifest};
+use crate::merge::merge_daily_file;
 
-/// HTTP client for the nichinichi-cloud sync API.
-///
-/// All methods are async and require a bearer token in `CloudConfig.token`.
-/// The base URL comes from `CloudConfig.base_url` (e.g. `https://sync.nichinichi.app`).
+// ── Public types ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileRef {
+    pub path: String,
+    pub hash: String,
+    pub modified_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UploadItem {
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadItem {
+    pub path: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictItem {
+    pub path: String,
+    pub local_hash: String,
+    pub remote_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReconcileResponse {
+    pub upload: Vec<UploadItem>,
+    pub download: Vec<DownloadItem>,
+    pub conflicts: Vec<ConflictItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountStatus {
+    pub plan: String,
+    pub status: String,
+    pub synced_files: i64,
+    pub storage_used_bytes: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncResult {
+    pub uploaded: usize,
+    pub downloaded: usize,
+    /// Conflicts that were auto-resolved (daily: union merge; other: remote wins).
+    pub resolved: usize,
+    /// Conflicts that could not be resolved (e.g. network failure during resolution).
+    pub conflicts: Vec<ConflictItem>,
+}
+
+// ── CloudClient ───────────────────────────────────────────────────────────────
+
 pub struct CloudClient {
     http: Client,
     base_url: String,
@@ -18,8 +71,8 @@ pub struct CloudClient {
 }
 
 impl CloudClient {
-    /// Build a client from the user's config.
-    /// Returns `CloudError::NotConfigured` if cloud sync is not set up.
+    /// Build from config. Returns `NotConfigured` if `cloud` key is absent,
+    /// `Unauthenticated` if token is empty.
     pub fn from_config(config: &Config) -> Result<Self, CloudError> {
         let cloud = config.cloud.as_ref().ok_or(CloudError::NotConfigured)?;
         if cloud.token.is_empty() {
@@ -32,82 +85,18 @@ impl CloudClient {
         })
     }
 
-    // -------------------------------------------------------------------------
-    // Internals
-    // -------------------------------------------------------------------------
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
+    // ── HTTP helpers ──────────────────────────────────────────────────────────
 
     fn url(&self, path: &str) -> String {
         format!("{}{}", self.base_url, path)
     }
 
-    async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, CloudError> {
-        let resp = self
-            .http
-            .get(self.url(path))
-            .bearer_auth(&self.token)
-            .send()
-            .await?;
-        self.parse(resp).await
-    }
-
-    async fn get_with_query<T: DeserializeOwned, Q: Serialize + ?Sized>(
-        &self,
-        path: &str,
-        query: &Q,
-    ) -> Result<T, CloudError> {
-        let resp = self
-            .http
-            .get(self.url(path))
-            .bearer_auth(&self.token)
-            .query(query)
-            .send()
-            .await?;
-        self.parse(resp).await
-    }
-
-    async fn post<B: Serialize + ?Sized, T: DeserializeOwned>(
-        &self,
-        path: &str,
-        body: &B,
-    ) -> Result<T, CloudError> {
-        let resp = self
-            .http
-            .post(self.url(path))
-            .bearer_auth(&self.token)
-            .json(body)
-            .send()
-            .await?;
-        self.parse(resp).await
-    }
-
-    async fn put<B: Serialize, T: DeserializeOwned>(
-        &self,
-        path: &str,
-        body: &B,
-    ) -> Result<T, CloudError> {
-        let resp = self
-            .http
-            .put(self.url(path))
-            .bearer_auth(&self.token)
-            .json(body)
-            .send()
-            .await?;
-        self.parse(resp).await
-    }
-
-    async fn delete_req(&self, path: &str) -> Result<(), CloudError> {
-        let resp = self
-            .http
-            .delete(self.url(path))
-            .bearer_auth(&self.token)
-            .send()
-            .await?;
-        if resp.status().is_success() {
-            return Ok(());
-        }
-        let status = resp.status().as_u16();
-        let body = resp.text().await.unwrap_or_default();
-        Err(CloudError::Api { status, body })
+    fn auth_header(&self) -> String {
+        format!("Bearer {}", self.token)
     }
 
     async fn parse<T: DeserializeOwned>(&self, resp: reqwest::Response) -> Result<T, CloudError> {
@@ -120,154 +109,332 @@ impl CloudClient {
             let body = resp.text().await.unwrap_or_default();
             return Err(CloudError::Api { status: code, body });
         }
-        let val = resp.json::<T>().await?;
-        Ok(val)
+        Ok(resp.json::<T>().await?)
     }
 
-    // -------------------------------------------------------------------------
-    // Manifest
-    // -------------------------------------------------------------------------
-
-    /// Fetch the sync manifest from the server.
-    /// Pass `query.since` to get only items changed after a prior sync.
-    pub async fn get_manifest(&self, query: &ManifestQuery) -> Result<SyncManifest, CloudError> {
-        self.get_with_query("/sync/manifest", query).await
-    }
-
-    // -------------------------------------------------------------------------
-    // Entries
-    // -------------------------------------------------------------------------
-
-    /// Fetch a single entry by ID.
-    pub async fn get_entry(&self, id: &str) -> Result<ParsedEntry, CloudError> {
-        self.get(&format!("/sync/entries/{id}")).await
-    }
-
-    /// Fetch multiple entries by ID in a single batched request.
-    pub async fn get_entries(&self, ids: &[String]) -> Result<Vec<ParsedEntry>, CloudError> {
-        #[derive(Serialize)]
-        struct BatchRequest<'a> {
-            ids: &'a [String],
-        }
-        self.post("/sync/entries/batch", &BatchRequest { ids }).await
-    }
-
-    /// Push (upsert) a single entry.
-    pub async fn push_entry(&self, entry: &ParsedEntry) -> Result<ParsedEntry, CloudError> {
-        self.put(&format!("/sync/entries/{}", entry.id), entry)
-            .await
-    }
-
-    /// Push a batch of entries.
-    pub async fn push_entries(&self, entries: &[ParsedEntry]) -> Result<Vec<ParsedEntry>, CloudError> {
-        self.post("/sync/entries", entries).await
-    }
-
-    /// Delete an entry by ID.
-    pub async fn delete_entry(&self, id: &str) -> Result<(), CloudError> {
-        self.delete_req(&format!("/sync/entries/{id}")).await
-    }
-
-    // -------------------------------------------------------------------------
-    // Goals
-    // -------------------------------------------------------------------------
-
-    /// Fetch all goals from the server.
-    pub async fn get_goals(&self) -> Result<Vec<Goal>, CloudError> {
-        self.get("/sync/goals").await
-    }
-
-    /// Fetch a single goal by ID (slug).
-    pub async fn get_goal(&self, id: &str) -> Result<Goal, CloudError> {
-        self.get(&format!("/sync/goals/{id}")).await
-    }
-
-    /// Push (upsert) a single goal.
-    pub async fn push_goal(&self, goal: &Goal) -> Result<Goal, CloudError> {
-        self.put(&format!("/sync/goals/{}", goal.id), goal).await
-    }
-
-    // -------------------------------------------------------------------------
-    // Playbooks
-    // -------------------------------------------------------------------------
-
-    /// Fetch all playbooks from the server.
-    pub async fn get_playbooks(&self) -> Result<Vec<Playbook>, CloudError> {
-        self.get("/sync/playbooks").await
-    }
-
-    /// Fetch a single playbook by ID (slug).
-    pub async fn get_playbook(&self, id: &str) -> Result<Playbook, CloudError> {
-        self.get(&format!("/sync/playbooks/{id}")).await
-    }
-
-    /// Push (upsert) a single playbook.
-    pub async fn push_playbook(&self, playbook: &Playbook) -> Result<Playbook, CloudError> {
-        self.put(&format!("/sync/playbooks/{}", playbook.id), playbook)
-            .await
-    }
-
-    // -------------------------------------------------------------------------
-    // Digests
-    // -------------------------------------------------------------------------
-
-    /// Fetch all digests from the server.
-    pub async fn get_digests(&self) -> Result<Vec<Digest>, CloudError> {
-        self.get("/sync/digests").await
-    }
-
-    /// Fetch a single digest by ID.
-    pub async fn get_digest(&self, id: &str) -> Result<Digest, CloudError> {
-        self.get(&format!("/sync/digests/{id}")).await
-    }
-
-    /// Push (upsert) a single digest.
-    pub async fn push_digest(&self, digest: &Digest) -> Result<Digest, CloudError> {
-        self.put(&format!("/sync/digests/{}", digest.id), digest)
-            .await
-    }
-
-    // -------------------------------------------------------------------------
-    // AI Conversations
-    // -------------------------------------------------------------------------
-
-    /// Push a saved AI conversation.
-    pub async fn push_ai_conversation(
-        &self,
-        convo: &AiConversation,
-    ) -> Result<AiConversation, CloudError> {
-        self.put(&format!("/sync/ai/{}", convo.id), convo).await
-    }
-
-    // -------------------------------------------------------------------------
-    // Auth helpers
-    // -------------------------------------------------------------------------
-
-    /// Exchange a device token / API key for a session token.
-    /// Returns the bearer token string to store in `CloudConfig.token`.
-    pub async fn authenticate(&self, api_key: &str) -> Result<String, CloudError> {
-        #[derive(Serialize)]
-        struct AuthRequest<'a> {
-            api_key: &'a str,
-        }
-        #[derive(serde::Deserialize)]
-        struct AuthResponse {
-            token: String,
-        }
-        let url = self.url("/auth/token");
+    async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, CloudError> {
         let resp = self
             .http
-            .post(url)
-            .json(&AuthRequest { api_key })
+            .get(self.url(path))
+            .header("Authorization", self.auth_header())
             .send()
             .await?;
-        let auth: AuthResponse = self.parse(resp).await?;
-        Ok(auth.token)
+        self.parse(resp).await
     }
 
-    /// Verify the current token is still valid. Returns `Ok(())` on success.
-    pub async fn verify_token(&self) -> Result<(), CloudError> {
-        let _: serde_json::Value = self.get("/auth/verify").await?;
-        Ok(())
+    async fn post_json<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T, CloudError> {
+        let resp = self
+            .http
+            .post(self.url(path))
+            .header("Authorization", self.auth_header())
+            .json(body)
+            .send()
+            .await?;
+        self.parse(resp).await
     }
+
+    async fn put_bytes(&self, path: &str, bytes: Vec<u8>) -> Result<(), CloudError> {
+        let resp = self
+            .http
+            .put(self.url(path))
+            .header("Authorization", self.auth_header())
+            .body(bytes)
+            .send()
+            .await?;
+        if resp.status().is_success() {
+            return Ok(());
+        }
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        Err(CloudError::Api { status, body })
+    }
+
+    async fn get_bytes(&self, path: &str) -> Result<Vec<u8>, CloudError> {
+        let resp = self
+            .http
+            .get(self.url(path))
+            .header("Authorization", self.auth_header())
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(CloudError::Api { status, body });
+        }
+        Ok(resp.bytes().await?.to_vec())
+    }
+
+    async fn delete_req(&self, path: &str) -> Result<(), CloudError> {
+        let resp = self
+            .http
+            .delete(self.url(path))
+            .header("Authorization", self.auth_header())
+            .send()
+            .await?;
+        if resp.status().is_success() {
+            return Ok(());
+        }
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        Err(CloudError::Api { status, body })
+    }
+
+    // ── Static auth (no token required) ──────────────────────────────────────
+
+    /// Sign in with email + password. Returns the bearer token to store.
+    pub async fn sign_in(
+        base_url: &str,
+        email: &str,
+        password: &str,
+    ) -> Result<String, CloudError> {
+        #[derive(Serialize)]
+        struct Req<'a> { email: &'a str, password: &'a str }
+        #[derive(Deserialize)]
+        struct Resp { api_token: String }
+
+        let url = format!("{}/auth/token", base_url.trim_end_matches('/'));
+        let resp = Client::new().post(&url).json(&Req { email, password }).send().await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(CloudError::Api { status, body });
+        }
+        Ok(resp.json::<Resp>().await?.api_token)
+    }
+
+    /// Register a new account. Returns the bearer token to store.
+    pub async fn register(
+        base_url: &str,
+        email: &str,
+        password: &str,
+    ) -> Result<String, CloudError> {
+        #[derive(Serialize)]
+        struct Req<'a> { email: &'a str, password: &'a str }
+        #[derive(Deserialize)]
+        struct Resp { api_token: String }
+
+        let url = format!("{}/auth/register", base_url.trim_end_matches('/'));
+        let resp = Client::new().post(&url).json(&Req { email, password }).send().await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(CloudError::Api { status, body });
+        }
+        Ok(resp.json::<Resp>().await?.api_token)
+    }
+
+    // ── Instance methods ──────────────────────────────────────────────────────
+
+    pub async fn sign_out(&self) -> Result<(), CloudError> {
+        self.delete_req("/auth/token").await
+    }
+
+    pub async fn get_account_status(&self) -> Result<AccountStatus, CloudError> {
+        self.get("/account/status").await
+    }
+
+    pub async fn reconcile(
+        &self,
+        files: Vec<FileRef>,
+        last_sync_at: Option<DateTime<Utc>>,
+    ) -> Result<ReconcileResponse, CloudError> {
+        #[derive(Serialize)]
+        struct Req { files: Vec<FileRef>, last_sync_at: Option<DateTime<Utc>> }
+        self.post_json("/sync/reconcile", &Req { files, last_sync_at }).await
+    }
+
+    pub async fn push_file(&self, rel_path: &str, bytes: Vec<u8>) -> Result<(), CloudError> {
+        let encoded = rel_path.replace('\\', "/");
+        self.put_bytes(&format!("/sync/files/{encoded}"), bytes).await
+    }
+
+    pub async fn pull_file(&self, rel_path: &str) -> Result<Vec<u8>, CloudError> {
+        let encoded = rel_path.replace('\\', "/");
+        self.get_bytes(&format!("/sync/files/{encoded}")).await
+    }
+
+    pub async fn resolve_conflict(&self, rel_path: &str, bytes: Vec<u8>) -> Result<(), CloudError> {
+        let encoded = rel_path.replace('\\', "/");
+        self.put_bytes(&format!("/sync/conflict/resolve/{encoded}"), bytes).await
+    }
+
+    pub async fn get_checkout_url(&self) -> Result<String, CloudError> {
+        #[derive(Deserialize)]
+        struct Resp { checkout_url: String }
+        Ok(self.get::<Resp>("/billing/checkout").await?.checkout_url)
+    }
+
+    pub async fn get_portal_url(&self) -> Result<String, CloudError> {
+        #[derive(Deserialize)]
+        struct Resp { portal_url: String }
+        Ok(self.get::<Resp>("/billing/portal").await?.portal_url)
+    }
+
+    // ── Full sync orchestration ───────────────────────────────────────────────
+
+    /// Full sync round-trip against the server.
+    pub async fn sync(&self, repo: &Path) -> Result<SyncResult, CloudError> {
+        let mut manifest = FileManifest::load(repo);
+        let current_files = walk_repo(repo)?;
+
+        let file_refs: Vec<FileRef> = current_files
+            .iter()
+            .map(|(rel, bytes)| FileRef {
+                path: rel.clone(),
+                hash: sha256_hex(bytes),
+                modified_at: manifest
+                    .files
+                    .get(rel)
+                    .map(|e| e.modified_at)
+                    .unwrap_or_else(Utc::now),
+            })
+            .collect();
+
+        let response = self.reconcile(file_refs, manifest.last_sync_at).await?;
+
+        let mut uploaded = 0usize;
+        let mut downloaded = 0usize;
+
+        // Upload concurrently (best-effort per file)
+        let file_map: std::collections::HashMap<&str, &Vec<u8>> =
+            current_files.iter().map(|(r, b)| (r.as_str(), b)).collect();
+
+        for item in &response.upload {
+            if let Some(&bytes) = file_map.get(item.path.as_str()) {
+                let bytes = bytes.clone();
+                if self.push_file(&item.path, bytes.clone()).await.is_ok() {
+                    manifest.update(&item.path, &bytes);
+                    uploaded += 1;
+                }
+            }
+        }
+
+        // Download concurrently (best-effort per file)
+        for item in &response.download {
+            if let Ok(bytes) = self.pull_file(&item.path).await {
+                let dest = repo.join(&item.path);
+                if let Some(parent) = dest.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                if std::fs::write(&dest, &bytes).is_ok() {
+                    manifest.update(&item.path, &bytes);
+                    downloaded += 1;
+                }
+            }
+        }
+
+        // Resolve conflicts: daily files get a union merge; all others fall
+        // back to remote-wins (structured files like goals/playbooks are
+        // safer to overwrite locally than to produce a garbled merge).
+        let mut resolved = 0usize;
+        let mut unresolved: Vec<ConflictItem> = Vec::new();
+
+        for item in response.conflicts {
+            let local_path = repo.join(&item.path);
+
+            let local_bytes = match std::fs::read(&local_path) {
+                Ok(b) => b,
+                Err(_) => { unresolved.push(item); continue; }
+            };
+            let remote_bytes = match self.pull_file(&item.path).await {
+                Ok(b) => b,
+                Err(_) => { unresolved.push(item); continue; }
+            };
+
+            let merged_bytes = if is_daily_path(&item.path) {
+                let local_str = String::from_utf8_lossy(&local_bytes);
+                let remote_str = String::from_utf8_lossy(&remote_bytes);
+                merge_daily_file(&local_str, &remote_str).into_bytes()
+            } else {
+                remote_bytes
+            };
+
+            if let Some(parent) = local_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let write_ok = std::fs::write(&local_path, &merged_bytes).is_ok();
+
+            if write_ok {
+                match self.resolve_conflict(&item.path, merged_bytes.clone()).await {
+                    Ok(()) => {
+                        manifest.update(&item.path, &merged_bytes);
+                        resolved += 1;
+                    }
+                    Err(_) => { unresolved.push(item); }
+                }
+            } else {
+                unresolved.push(item);
+            }
+        }
+
+        manifest.last_sync_at = Some(Utc::now());
+        let _ = manifest.save(repo);
+
+        Ok(SyncResult {
+            uploaded,
+            downloaded,
+            resolved,
+            conflicts: unresolved,
+        })
+    }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Returns true if `rel` names a daily entry file (`YYYY-MM-DD.md`).
+/// Works for root-level files and archived ones (`archive/2025/2025-01-03.md`).
+fn is_daily_path(rel: &str) -> bool {
+    let name = Path::new(rel)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    name.len() == 13
+        && name.ends_with(".md")
+        && name.as_bytes()[4] == b'-'
+        && name.as_bytes()[7] == b'-'
+        && name[..4].bytes().all(|b| b.is_ascii_digit())
+        && name[5..7].bytes().all(|b| b.is_ascii_digit())
+        && name[8..10].bytes().all(|b| b.is_ascii_digit())
+}
+
+// ── Repo walker ───────────────────────────────────────────────────────────────
+
+fn walk_repo(repo: &Path) -> Result<Vec<(String, Vec<u8>)>, CloudError> {
+    let mut files = Vec::new();
+    walk_dir(repo, repo, &mut files)?;
+    Ok(files)
+}
+
+fn walk_dir(root: &Path, dir: &Path, out: &mut Vec<(String, Vec<u8>)>) -> Result<(), CloudError> {
+    let entries = std::fs::read_dir(dir).map_err(|e| CloudError::Io(e.to_string()))?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = path.file_name().unwrap_or_default().to_string_lossy();
+
+        // Skip hidden dirs (.quiet/, .git/, etc.) and non-content files
+        if name.starts_with('.') || name == "nichinichi.db"
+            || name.ends_with("-shm") || name.ends_with("-wal")
+        {
+            continue;
+        }
+
+        if path.is_dir() {
+            walk_dir(root, &path, out)?;
+        } else if path.extension().map(|e| e == "md").unwrap_or(false) {
+            if let Ok(bytes) = std::fs::read(&path) {
+                let rel = path
+                    .strip_prefix(root)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                if !rel.is_empty() {
+                    out.push((rel, bytes));
+                }
+            }
+        }
+    }
+    Ok(())
 }

@@ -3,7 +3,7 @@ pub mod error;
 pub mod manifest;
 pub mod merge;
 
-pub use client::CloudClient;
+pub use client::{AccountStatus, CloudClient, ConflictItem, DownloadItem, FileRef, SyncResult, UploadItem};
 pub use error::CloudError;
-pub use manifest::{ManifestEntry, ManifestKind, ManifestQuery, SyncManifest};
-pub use merge::{ConflictStrategy, MergeOutcome, diff_manifests, merge_entry};
+pub use manifest::{sha256_hex, FileEntry, FileManifest};
+pub use merge::{merge_daily_file, merge_entry, ConflictStrategy, MergeOutcome};
