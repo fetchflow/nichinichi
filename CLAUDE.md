@@ -46,21 +46,27 @@ nichinichi/
 ├── Cargo.toml                   # Cargo workspace root (resolver = "2")
 ├── crates/
 │   ├── types/                   # Shared structs: ParsedEntry, Goal,
-│   │                            #   GoalStep, Config, EntryType, OrgScope
+│   │                            #   GoalStep, Config, CloudConfig,
+│   │                            #   EntryType, OrgScope, ChatMessage
 │   ├── parser/                  # All markdown parsers — fully tested
-│   │                            #   entries, goals, playbooks, digests
+│   │                            #   entries, goals, playbooks, digests,
+│   │                            #   config, router
 │   ├── sync/                    # SQLite writer + file watcher + rebuild
-│   │                            #   SyncTarget trait (Local impl only)
-│   └── ai/                      # FTS5 query builder + Claude SSE stream
+│   │                            #   SyncTarget trait (LocalSqlite impl)
+│   ├── ai/                      # FTS5 query builder + Claude SSE stream
+│   │                            #   + save/load/list AI conversations
+│   └── cloud/                   # Cloud sync backend (Phase 2)
+│                                #   CloudClient, FileManifest, merge
 ├── apps/
 │   ├── cli/                     # `nichinichi` binary — clap
 │   └── desktop/                 # Tauri v2 desktop app
 │       ├── src-tauri/
 │       │   ├── Cargo.toml
 │       │   └── src/
-│       │       ├── lib.rs       # Tauri setup: plugins, tray, file watcher
+│       │       ├── lib.rs       # Tauri setup: plugins, tray, file watcher,
+│       │       │                #   CloudClient init
 │       │       ├── main.rs
-│       │       └── commands.rs  # All Tauri IPC commands
+│       │       └── commands.rs  # All Tauri IPC commands (~43 commands)
 │       ├── src/
 │       │   ├── App.tsx          # Root: section routing (no auth gate)
 │       │   ├── types/           # TypeScript types (Entry, Goal, Theme…)
@@ -73,7 +79,13 @@ nichinichi/
 ├── docs/
 │   ├── development.md
 │   ├── file-formats.md          # Canonical format for all markdown files
-│   └── testing.md
+│   ├── testing.md
+│   ├── ai-chat.md
+│   ├── icon-setup.md
+│   ├── logging-guide.md
+│   └── releasing.md
+├── demo/                        # Sample nichinichi repo with test data
+│   └── nichinichi/              # Example daily files, goals, playbooks
 ├── .gitignore                   # includes nichinichi.db
 └── package.json                 # pnpm workspace root
 ```
@@ -86,7 +98,11 @@ nichinichi/
 types  ←  parser  ←  sync  ←  ai
   ↑          ↑        ↑       ↑
   └──────────┴────────┴───────┴── cli (binary)
-  └──────────┴────────┴───────┴── desktop/src-tauri (Tauri binary)
+  │
+types  ←  cloud
+  ↑          ↑
+  └──────────┴───────────────── desktop/src-tauri (Tauri binary)
+                                 (depends on all: types, parser, sync, ai, cloud)
 ```
 
 ---
@@ -278,6 +294,13 @@ ai:
 # default org for entries with no @org tag and no project .nichinichi.yml
 default_org: personal
 
+# cloud sync (Phase 2) — optional, written by the app on sign-in
+cloud:
+  base_url: https://sync.nichinichi.app
+  token: ""                    # bearer token, written on sign-in
+  last_synced_at: null         # unix timestamp
+  conflict_strategy: remote_wins  # remote_wins | local_wins | error
+
 # project-level .nichinichi.yml (in any project root)
 # project: api-refactor
 # org: acme
@@ -389,17 +412,18 @@ END;
 
 -- goals (reconstructed from goals/active/*.md and goals/archive/*.md)
 CREATE TABLE goals (
-  id          TEXT PRIMARY KEY,   -- slug from filename
-  title       TEXT NOT NULL,
-  type        TEXT CHECK(type IN ('career','learning')),
-  horizon     TEXT,
-  status      TEXT CHECK(status IN ('active','paused','done','abandoned'))
-              DEFAULT 'active',
-  why         TEXT,
-  org         TEXT,
-  file_path   TEXT NOT NULL,
-  created_at  TEXT,
-  updated_at  TEXT
+  id              TEXT PRIMARY KEY,   -- slug from filename
+  title           TEXT NOT NULL,
+  type            TEXT CHECK(type IN ('career','learning')),
+  horizon         TEXT,
+  status          TEXT CHECK(status IN ('active','paused','done','abandoned'))
+                  DEFAULT 'active',
+  why             TEXT,
+  org             TEXT,
+  file_path       TEXT NOT NULL,
+  completion_date TEXT,               -- set when archived
+  created_at      TEXT,
+  updated_at      TEXT
 );
 
 -- goal steps (reconstructed from goal file ## steps section)
@@ -443,6 +467,7 @@ CREATE TABLE playbooks (
   org         TEXT,
   forked_from TEXT,
   file_path   TEXT NOT NULL,
+  created_at  TEXT,
   updated_at  TEXT
 );
 
@@ -535,6 +560,35 @@ forwarding triggers via `tokio::sync::mpsc` channel (capacity 1,
 `try_send` deduplicates rapid saves). Excludes `.quiet/` and
 `nichinichi.db`. On change: re-parses the affected file and upserts to
 SQLite. Does not require a full rebuild for single-file changes.
+If a `CloudClient` is available and configured, the watcher also pushes
+the changed file to cloud after the local SQLite upsert (best-effort,
+non-blocking).
+
+### Cloud sync (Phase 2)
+
+`crates/cloud` implements file-level sync against the nichinichi cloud
+backend (`https://sync.nichinichi.app`).
+
+**`CloudClient`** — HTTP client wrapping the sync API:
+- `sign_in()` / `register()` — authenticate, write token to config
+- `sync(repo)` — full reconcile: hash local files, compare with server
+  manifest, upload changed files, download remote changes, resolve
+  conflicts
+- `reconcile()` / `push_file()` / `pull_file()` / `resolve_conflict()`
+- `get_checkout_url()` / `get_portal_url()` — Stripe billing
+
+**`FileManifest`** — tracks SHA-256 hashes and `modified_at` per file,
+persisted as `.nichinichi-manifest.json` in the repo root. Used to
+detect local changes since last sync without re-hashing everything.
+
+**`merge.rs`** — conflict resolution for daily files:
+- `ConflictStrategy`: `RemoteWins` | `LocalWins` | `Error`
+- `merge_daily_file()` — union merge on daily entry files: deduplicates
+  entries by first line, keeps the longer version of each, sorts by time
+
+**Tauri commands for cloud:**
+`cloud_sign_in`, `cloud_register`, `cloud_sign_out`, `cloud_sync_now`,
+`get_cloud_status`, `get_billing_checkout_url`, `get_billing_portal_url`
 
 ### AI streaming
 
@@ -582,19 +636,20 @@ Goals, Dashboard graphs.
 
 ## SyncTarget Trait
 
-Defined in `crates/sync`. `LocalSqlite` is the only implementation.
-The trait provides a seam for adding additional sync backends without
-touching Tauri commands or CLI code.
+Defined in `crates/sync/src/sync_target.rs`. `LocalSqlite` is the only
+implementation. The trait provides a seam for adding additional sync
+backends without touching Tauri commands or CLI code.
 
 ```rust
 #[async_trait]
 pub trait SyncTarget: Send + Sync {
-    async fn upsert_entry(&self, entry: &ParsedEntry) -> Result<()>;
-    async fn upsert_goal(&self, goal: &Goal) -> Result<()>;
-    async fn upsert_playbook(&self, playbook: &Playbook) -> Result<()>;
-    async fn upsert_digest(&self, digest: &Digest) -> Result<()>;
-    async fn delete_entry(&self, id: &str) -> Result<()>;
-    async fn rebuild(&self) -> Result<()>;
+    async fn upsert_entry(&self, entry: &ParsedEntry) -> Result<(), SyncError>;
+    async fn upsert_goal(&self, goal: &Goal) -> Result<(), SyncError>;
+    async fn upsert_playbook(&self, playbook: &Playbook) -> Result<(), SyncError>;
+    async fn upsert_digest(&self, digest: &Digest) -> Result<(), SyncError>;
+    async fn upsert_ai_conversation(&self, ai: &AiConversation) -> Result<(), SyncError>;
+    async fn delete_entry(&self, id: &str) -> Result<(), SyncError>;
+    async fn rebuild(&self, repo: &Path, config: &Config) -> Result<(), SyncError>;
 }
 
 pub struct LocalSqlite {
@@ -687,21 +742,28 @@ notify-debouncer-mini = "0.4"
 reqwest          = { version = "0.12", features = ["json", "stream"] }
 futures          = "0.3"
 
+# cloud
+sha2             = "0.10"    # manifest file hashing
+hex              = "0.4"     # hex-encode SHA-256 digests
+
 # cli
 clap             = { version = "4",    features = ["derive"] }
 colored          = "2"
+dialoguer        = "0.11"    # interactive prompts
 
 # desktop/src-tauri
-tauri            = { version = "2",    features = ["tray-icon"] }
+tauri                  = { version = "2", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
-open             = "5"
-urlencoding      = "2"
+tauri-plugin-dialog    = "2"
+tauri-plugin-updater   = "2"
+open                   = "5"
+urlencoding            = "2"
 ```
 
 **Note:** `sqlx` with the `sqlite` feature replaces the previous
 `rusqlite` direct usage. Use `sqlx::SqlitePool` with
 `tokio::task::spawn_blocking` where blocking calls are unavoidable.
-Migrations live in `crates/sync/migrations/`.
+Migrations live in `crates/sync/migrations/` (single file: `001_initial.sql`).
 
 ---
 
@@ -715,6 +777,12 @@ ai:
   base_url: https://api.anthropic.com  # or Ollama, LiteLLM, Open WebUI
   api_key: ""                          # entered via Settings UI
   model: claude-sonnet-4-5
+
+cloud:
+  base_url: https://sync.nichinichi.app
+  token: ""                            # written by app on sign-in
+  last_synced_at: null                 # unix timestamp, updated on sync
+  conflict_strategy: remote_wins       # remote_wins | local_wins | error
 
 default_org: personal                  # fallback when no @org and no
                                        # project .nichinichi.yml
@@ -769,3 +837,14 @@ desktop app always reads from the config file.
 - `.quiet/` entries are never indexed, never sent to AI, never synced
   under any circumstances — this is enforced in the file watcher and
   the sync rebuild, not just the UI
+- `crates/cloud` is a standalone crate (no dependency on `sync` or `ai`)
+  — cloud sync operates at the file level, not the SQLite level
+- `FileManifest` persisted as `.nichinichi-manifest.json` in the repo
+  root tracks SHA-256 hashes per file for efficient change detection
+- Conflict resolution defaults to `remote_wins`; `merge_daily_file()`
+  union-merges daily entry files when conflicts must be resolved at the
+  entry level rather than the file level
+- `SyncTarget::rebuild()` takes `repo: &Path` and `config: &Config`
+  — callers must pass these; the trait no longer reads config itself
+- `SyncTarget::upsert_ai_conversation()` was added alongside the
+  `ai/` conversation save feature — all implementations must handle it
