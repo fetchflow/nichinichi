@@ -1028,7 +1028,7 @@ pub async fn save_ai_config(
     state.config.ai.base_url = base_url.clone();
     state.config.ai.model = model.clone();
     state.config.ai.provider = match provider.as_str() {
-        "openwebui" => AiProvider::Openwebui,
+        "litellm" => AiProvider::Litellm,
         _ => AiProvider::Ollama,
     };
 
@@ -1093,8 +1093,8 @@ pub async fn get_ai_config(
 ) -> Result<serde_json::Value, String> {
     let state = state.lock().await;
     let provider = match state.config.ai.provider {
-        AiProvider::Ollama    => "ollama",
-        AiProvider::Openwebui => "openwebui",
+        AiProvider::Ollama  => "ollama",
+        AiProvider::Litellm => "litellm",
     };
     Ok(serde_json::json!({
         "base_url": state.config.ai.base_url,

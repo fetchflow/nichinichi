@@ -20,12 +20,12 @@ interface Props {
 export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspaces, onWorkspacesChange, activeModel, onModelChange }: Props) {
   const PROVIDER_DEFAULTS: Record<string, string> = {
     ollama: "http://localhost:11434",
-    openwebui: "http://localhost:3000",
+    litellm: "http://localhost:4000",
   };
 
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
-  const [provider, setProvider] = useState<"ollama" | "openwebui">("ollama");
+  const [provider, setProvider] = useState<"ollama" | "litellm">("ollama");
   const [models, setModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -42,7 +42,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
       .finally(() => setLoadingModels(false));
   };
 
-  const handleProviderChange = (p: "ollama" | "openwebui") => {
+  const handleProviderChange = (p: "ollama" | "litellm") => {
     setProvider(p);
     setModels([]);
     // Swap base URL only if it currently equals the other provider's default
@@ -57,7 +57,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
       .then(({ base_url, model, provider: p }) => {
         if (base_url) setBaseUrl(base_url);
         if (model) onModelChange(model);
-        if (p === "openwebui") setProvider("openwebui");
+        if (p === "litellm") setProvider("litellm");
       })
       .catch(() => {});
     fetchModels();
@@ -232,7 +232,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
           <div>
             <label className="text-xs text-gray-500 block mb-1">Provider</label>
             <div className="flex gap-2">
-              {(["ollama", "openwebui"] as const).map((p) => (
+              {(["ollama", "litellm"] as const).map((p) => (
                 <button
                   key={p}
                   type="button"
@@ -243,7 +243,7 @@ export function SettingsView({ theme, onThemeChange, syncNow, syncing, workspace
                       : "bg-gray-100 dark:bg-gray-800 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700"
                   }`}
                 >
-                  {p === "ollama" ? "Ollama" : "Open WebUI"}
+                  {p === "ollama" ? "Ollama" : "LiteLLM"}
                 </button>
               ))}
             </div>
