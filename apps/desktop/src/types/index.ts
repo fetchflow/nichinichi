@@ -1,6 +1,27 @@
 export * from "./entry";
 export * from "./goal";
 
+export interface CloudStatus {
+  signed_in: boolean;
+  plan: string;
+  plan_status: string;
+  synced_files: number;
+  storage_used_bytes: number;
+  last_synced_at: number | null;
+}
+
+export interface CloudConflict {
+  path: string;
+  local_hash: string;
+  remote_hash: string;
+}
+
+export interface CloudSyncResult {
+  uploaded: number;
+  downloaded: number;
+  conflicts: CloudConflict[];
+}
+
 export interface Playbook {
   id: string;
   title: string;

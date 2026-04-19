@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::error::CloudError;
 use nichinichi_types::ParsedEntry;
 
@@ -60,41 +62,120 @@ pub fn merge_entry(
     }
 }
 
-/// Diff two manifest ID sets and return:
-/// - `to_pull`: IDs present on remote but absent locally, or newer on remote.
-/// - `to_push`: IDs present locally but absent on remote.
-pub fn diff_manifests(
-    local_ids: &std::collections::HashMap<String, String>,
-    remote_manifest: &[crate::manifest::ManifestEntry],
-) -> (Vec<String>, Vec<String>) {
-    let mut to_pull: Vec<String> = Vec::new();
-    let mut remote_id_set: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
+// ── Daily file merge ──────────────────────────────────────────────────────────
 
-    for remote in remote_manifest {
-        remote_id_set.insert(remote.id.clone());
-        match local_ids.get(&remote.id) {
-            None => to_pull.push(remote.id.clone()),
-            Some(local_ts) if local_ts.as_str() < remote.updated_at.as_str() => {
-                to_pull.push(remote.id.clone());
-            }
-            _ => {}
+/// Merge two daily entry files by taking the union of their entry blocks.
+///
+/// The file header (e.g. `# 2026-03-17`) is taken from `local`.
+/// Duplicate entries (same first line) are deduped — the longer block wins,
+/// so a detail block added on one machine is preserved.
+/// Entries are sorted by their `HH:MM` timestamp prefix.
+pub fn merge_daily_file(local: &str, remote: &str) -> String {
+    let (local_header, local_blocks) = split_daily_file(local);
+    let (_, remote_blocks) = split_daily_file(remote);
+
+    // key → block lines. Keep the longer block on collision (more detail).
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    for block in local_blocks.into_iter().chain(remote_blocks) {
+        let key = block_key(&block);
+        if key.is_empty() {
+            continue;
+        }
+        let entry = map.entry(key).or_default();
+        if block.len() > entry.len() {
+            *entry = block;
         }
     }
 
-    let to_push: Vec<String> = local_ids
-        .keys()
-        .filter(|id| !remote_id_set.contains(*id))
-        .cloned()
+    // Sort by timestamp so the merged file stays chronological.
+    let mut sorted: Vec<Vec<String>> = map.into_values().collect();
+    sorted.sort_by_key(|b| block_time(b));
+
+    // Reconstruct: header + alternating --- / entry lines / --- pattern.
+    let mut out = local_header.clone();
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    for block in &sorted {
+        out.push_str("---\n");
+        for line in block {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    if !sorted.is_empty() {
+        out.push_str("---\n");
+    }
+    out
+}
+
+/// Split a daily file into (header_text, Vec<entry_block_lines>).
+///
+/// The header is everything before the first `---` delimiter.
+/// Each entry block is the slice of lines between two consecutive `---` lines.
+fn split_daily_file(content: &str) -> (String, Vec<Vec<String>>) {
+    let lines: Vec<&str> = content.lines().collect();
+
+    let delimiters: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| l.trim() == "---")
+        .map(|(i, _)| i)
         .collect();
 
-    (to_pull, to_push)
+    if delimiters.is_empty() {
+        return (content.to_string(), vec![]);
+    }
+
+    let first = delimiters[0];
+    // Trim trailing blank lines from the header.
+    let mut header_end = first;
+    while header_end > 0 && lines[header_end - 1].trim().is_empty() {
+        header_end -= 1;
+    }
+    let header = lines[..header_end].join("\n");
+
+    let mut blocks = Vec::new();
+    for window in delimiters.windows(2) {
+        let start = window[0] + 1;
+        let end = window[1];
+        let block: Vec<String> = lines[start..end].iter().map(|l| l.to_string()).collect();
+        if block.iter().any(|l| !l.trim().is_empty()) {
+            blocks.push(block);
+        }
+    }
+
+    (header, blocks)
+}
+
+/// The dedup key for an entry block: its first non-empty line (the `HH:MM | …` line).
+fn block_key(block: &[String]) -> String {
+    block
+        .iter()
+        .find(|l| !l.trim().is_empty())
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Extract the sortable time string (`HH:MM`) from an entry block.
+/// Returns an empty string for blocks that don't start with a valid timestamp.
+fn block_time(block: &[String]) -> String {
+    let first = block_key(block);
+    let s = first.trim_start_matches('~');
+    if s.len() >= 5
+        && s.as_bytes()[2] == b':'
+        && s[..2].bytes().all(|b| b.is_ascii_digit())
+        && s[3..5].bytes().all(|b| b.is_ascii_digit())
+    {
+        s[..5].to_string()
+    } else {
+        String::new()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     fn dummy_entry(id: &str) -> ParsedEntry {
         ParsedEntry {
@@ -170,31 +251,78 @@ mod tests {
         assert!(matches!(result, Err(CloudError::MergeConflict { .. })));
     }
 
+    // ── merge_daily_file tests ────────────────────────────────────────────────
+
+    const HEADER: &str = "# 2026-03-17";
+
+    fn daily(entries: &[(&str, &str)]) -> String {
+        // Build a daily file from (time, body) pairs.
+        let mut out = format!("{HEADER}\n");
+        for (time, body) in entries {
+            out.push_str(&format!("---\n{time} | {body}\n"));
+        }
+        if !entries.is_empty() {
+            out.push_str("---\n");
+        }
+        out
+    }
+
     #[test]
-    fn test_diff_manifests() {
-        use crate::manifest::{ManifestEntry, ManifestKind};
+    fn test_merge_daily_disjoint_entries_are_unioned() {
+        let local = daily(&[("09:00", "entry A @acme #log"), ("11:00", "entry B @acme #log")]);
+        let remote = daily(&[("10:00", "entry C @acme #log")]);
+        let merged = merge_daily_file(&local, &remote);
+        assert!(merged.contains("09:00 | entry A"));
+        assert!(merged.contains("10:00 | entry C"));
+        assert!(merged.contains("11:00 | entry B"));
+        // Sorted chronologically — C should appear between A and B
+        let pos_a = merged.find("09:00").unwrap();
+        let pos_c = merged.find("10:00").unwrap();
+        let pos_b = merged.find("11:00").unwrap();
+        assert!(pos_a < pos_c && pos_c < pos_b);
+    }
 
-        let mut local: HashMap<String, String> = HashMap::new();
-        local.insert("id-local-only".to_string(), "2026-01-01T00:00:00".to_string());
-        local.insert("id-both".to_string(), "2026-01-01T00:00:00".to_string());
+    #[test]
+    fn test_merge_daily_identical_entries_deduped() {
+        let file = daily(&[("09:00", "shared entry @acme #log")]);
+        let merged = merge_daily_file(&file, &file);
+        assert_eq!(merged.matches("09:00 | shared entry").count(), 1);
+    }
 
-        let remote = vec![
-            ManifestEntry {
-                id: "id-both".to_string(),
-                updated_at: "2026-01-02T00:00:00".to_string(),
-                kind: ManifestKind::Entry,
-            },
-            ManifestEntry {
-                id: "id-remote-only".to_string(),
-                updated_at: "2026-01-01T00:00:00".to_string(),
-                kind: ManifestKind::Entry,
-            },
-        ];
+    #[test]
+    fn test_merge_daily_longer_block_wins() {
+        // local has the entry without detail; remote has it with detail
+        let local = "# 2026-03-17\n---\n09:00 | fixed the bug @acme #solution\n---\n";
+        let remote =
+            "# 2026-03-17\n---\n09:00 | fixed the bug @acme #solution\n\n       Root cause: off-by-one\n---\n";
+        let merged = merge_daily_file(local, remote);
+        assert!(merged.contains("Root cause: off-by-one"));
+    }
 
-        let (to_pull, to_push) = diff_manifests(&local, &remote);
+    #[test]
+    fn test_merge_daily_header_taken_from_local() {
+        let local = daily(&[("09:00", "local only @acme #log")]);
+        let remote = "# 2026-03-17\n---\n10:00 | remote only @acme #log\n---\n";
+        let merged = merge_daily_file(&local, remote);
+        assert!(merged.starts_with(HEADER));
+    }
 
-        assert!(to_pull.contains(&"id-both".to_string()));
-        assert!(to_pull.contains(&"id-remote-only".to_string()));
-        assert_eq!(to_push, vec!["id-local-only".to_string()]);
+    #[test]
+    fn test_merge_daily_empty_remote() {
+        let local = daily(&[("09:00", "only local @acme #log")]);
+        let remote = format!("{HEADER}\n");
+        let merged = merge_daily_file(&local, &remote);
+        assert!(merged.contains("09:00 | only local"));
+    }
+
+    #[test]
+    fn test_merge_daily_approximate_timestamp_sorted() {
+        let local = daily(&[("~09:30", "approximate entry #log")]);
+        let remote = daily(&[("09:00", "exact entry #log"), ("10:00", "later #log")]);
+        let merged = merge_daily_file(&local, &remote);
+        let pos_exact = merged.find("09:00").unwrap();
+        let pos_approx = merged.find("~09:30").unwrap();
+        let pos_later = merged.find("10:00").unwrap();
+        assert!(pos_exact < pos_approx && pos_approx < pos_later);
     }
 }

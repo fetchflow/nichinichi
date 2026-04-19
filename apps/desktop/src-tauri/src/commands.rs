@@ -1,9 +1,11 @@
 use nichinichi_ai::{list_conversations, load_conversation, save_conversation, search_entries, AiClient};
+use nichinichi_cloud::{CloudClient, FileManifest};
 use nichinichi_sync::{rebuild_from_disk, sync_incremental, LocalSqlite, SyncTarget};
 use nichinichi_types::{AiProvider, ChatMessage, Config, Digest, Goal, OrgScope, ParsedEntry, Playbook};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tauri::{Emitter, State, Window};
 use tokio::sync::Mutex;
 
@@ -11,6 +13,7 @@ use tokio::sync::Mutex;
 pub struct AppState {
     pub pool: SqlitePool,
     pub config: Config,
+    pub cloud_client: Option<Arc<CloudClient>>,
 }
 
 // ── Entries ────────────────────────────────────────────────────────────────
@@ -2001,4 +2004,259 @@ fn row_to_entry(row: EntryRow) -> ParsedEntry {
         approximate: row.approximate != 0,
         raw_line: row.raw_line,
     }
+}
+
+// ── Cloud Sync ─────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct CloudStatus {
+    pub signed_in: bool,
+    pub plan: String,
+    pub plan_status: String,
+    pub synced_files: i64,
+    pub storage_used_bytes: i64,
+    pub last_synced_at: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct CloudSyncResult {
+    pub uploaded: usize,
+    pub downloaded: usize,
+    pub resolved: usize,
+    pub conflicts: Vec<CloudConflict>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CloudConflict {
+    pub path: String,
+    pub local_hash: String,
+    pub remote_hash: String,
+}
+
+#[tauri::command]
+pub async fn cloud_sign_in(
+    base_url: String,
+    email: String,
+    password: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let token = CloudClient::sign_in(&base_url, &email, &password)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut state = state.lock().await;
+    // Update in-memory config
+    if let Some(cloud) = state.config.cloud.as_mut() {
+        cloud.token = token.clone();
+        cloud.base_url = base_url.clone();
+    } else {
+        state.config.cloud = Some(nichinichi_types::CloudConfig {
+            base_url: base_url.clone(),
+            token: token.clone(),
+            last_synced_at: None,
+            conflict_strategy: "remote_wins".to_string(),
+        });
+    }
+
+    // Rebuild cloud_client
+    state.cloud_client = CloudClient::from_config(&state.config).ok().map(Arc::new);
+
+    // Persist token to ~/.nichinichi.yml
+    persist_cloud_token(&base_url, &token)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cloud_sign_out(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let mut state = state.lock().await;
+    if let Some(client) = state.cloud_client.take() {
+        let _ = client.sign_out().await;
+    }
+    if let Some(cloud) = state.config.cloud.as_mut() {
+        cloud.token = String::new();
+    }
+    persist_cloud_token(
+        state.config.cloud.as_ref().map(|c| c.base_url.as_str()).unwrap_or(""),
+        "",
+    )?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cloud_sync_now(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<CloudSyncResult, String> {
+    let (client, repo) = {
+        let state = state.lock().await;
+        let client = state
+            .cloud_client
+            .clone()
+            .ok_or("not signed in to cloud")?;
+        let repo = state.config.repo.clone();
+        (client, repo)
+    };
+    let result = client.sync(&repo).await.map_err(|e| e.to_string())?;
+    Ok(CloudSyncResult {
+        uploaded: result.uploaded,
+        downloaded: result.downloaded,
+        resolved: result.resolved,
+        conflicts: result
+            .conflicts
+            .into_iter()
+            .map(|c| CloudConflict {
+                path: c.path,
+                local_hash: c.local_hash,
+                remote_hash: c.remote_hash,
+            })
+            .collect(),
+    })
+}
+
+#[tauri::command]
+pub async fn get_cloud_status(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<CloudStatus, String> {
+    let (client, repo) = {
+        let state = state.lock().await;
+        match state.cloud_client.clone() {
+            Some(c) => (c, state.config.repo.clone()),
+            None => {
+                return Ok(CloudStatus {
+                    signed_in: false,
+                    plan: "free".into(),
+                    plan_status: "active".into(),
+                    synced_files: 0,
+                    storage_used_bytes: 0,
+                    last_synced_at: None,
+                });
+            }
+        }
+    };
+
+    let account = client
+        .get_account_status()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let manifest = FileManifest::load(&repo);
+    let last_synced_at = manifest
+        .last_sync_at
+        .map(|dt| dt.timestamp());
+
+    Ok(CloudStatus {
+        signed_in: true,
+        plan: account.plan,
+        plan_status: account.status,
+        synced_files: account.synced_files,
+        storage_used_bytes: account.storage_used_bytes,
+        last_synced_at,
+    })
+}
+
+#[tauri::command]
+pub async fn get_billing_checkout_url(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<String, String> {
+    let client = state
+        .lock()
+        .await
+        .cloud_client
+        .clone()
+        .ok_or("not signed in to cloud")?;
+    client.get_checkout_url().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_billing_portal_url(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<String, String> {
+    let client = state
+        .lock()
+        .await
+        .cloud_client
+        .clone()
+        .ok_or("not signed in to cloud")?;
+    client.get_portal_url().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn cloud_register(
+    base_url: String,
+    email: String,
+    password: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let token = CloudClient::register(&base_url, &email, &password)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut state = state.lock().await;
+    if let Some(cloud) = state.config.cloud.as_mut() {
+        cloud.token = token.clone();
+        cloud.base_url = base_url.clone();
+    } else {
+        state.config.cloud = Some(nichinichi_types::CloudConfig {
+            base_url: base_url.clone(),
+            token: token.clone(),
+            last_synced_at: None,
+            conflict_strategy: "remote_wins".to_string(),
+        });
+    }
+    state.cloud_client = CloudClient::from_config(&state.config).ok().map(Arc::new);
+    persist_cloud_token(&base_url, &token)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    open::that(&url).map_err(|e| e.to_string())
+}
+
+// ── Cloud config persistence ──────────────────────────────────────────────
+
+fn persist_cloud_token(base_url: &str, token: &str) -> Result<(), String> {
+    let home = dirs::home_dir().ok_or("cannot find home directory")?;
+    let config_path = home.join(".nichinichi.yml");
+    let content = if config_path.exists() {
+        std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?
+    } else {
+        String::new()
+    };
+
+    let updated = if content.contains("cloud:") {
+        // Update existing cloud block token line
+        let mut lines: Vec<String> = content.lines().map(String::from).collect();
+        let mut in_cloud = false;
+        let mut token_updated = false;
+        for line in &mut lines {
+            if line.trim_start() == "cloud:" || line.starts_with("cloud:") {
+                in_cloud = true;
+            } else if in_cloud && !line.starts_with(' ') && !line.starts_with('\t') {
+                in_cloud = false;
+            }
+            if in_cloud && line.trim_start().starts_with("token:") && !token_updated {
+                let indent = line.len() - line.trim_start().len();
+                *line = format!("{}token: \"{}\"", " ".repeat(indent), token);
+                token_updated = true;
+            }
+        }
+        if !token_updated {
+            // Append token under cloud block
+            lines.push(format!("  token: \"{token}\""));
+        }
+        lines.join("\n")
+    } else {
+        // Append cloud block
+        format!(
+            "{}\ncloud:\n  base_url: \"{}\"\n  token: \"{}\"\n  conflict_strategy: \"remote_wins\"\n",
+            content.trim_end(),
+            base_url,
+            token
+        )
+    };
+
+    std::fs::write(&config_path, updated).map_err(|e| e.to_string())?;
+    Ok(())
 }

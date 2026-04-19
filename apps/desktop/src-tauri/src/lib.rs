@@ -1,8 +1,10 @@
 mod commands;
 
 use commands::AppState;
+use nichinichi_cloud::CloudClient;
 use nichinichi_parser::load_config;
 use nichinichi_sync::{open_db, start_file_watcher, sync_incremental};
+use std::sync::Arc;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -73,6 +75,14 @@ pub fn run() {
             commands::get_setup_status,
             commands::check_for_update,
             commands::install_update,
+            commands::cloud_sign_in,
+            commands::cloud_register,
+            commands::cloud_sign_out,
+            commands::cloud_sync_now,
+            commands::get_cloud_status,
+            commands::get_billing_checkout_url,
+            commands::get_billing_portal_url,
+            commands::open_external_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -87,6 +97,10 @@ async fn setup_app(app: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
 
     // Open SQLite database
     let pool = open_db(&config.repo).await?;
+
+    // Initialize cloud client (best-effort — absent if not configured / unauthenticated)
+    let cloud_client: Option<Arc<CloudClient>> =
+        CloudClient::from_config(&config).ok().map(Arc::new);
 
     // Seed default settings if absent
     sqlx::query(
@@ -105,12 +119,24 @@ async fn setup_app(app: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
 
     // Start file watcher
     let watcher_app = app.clone();
+    let cloud_watcher = cloud_client.clone();
+    let repo_watcher = config.repo.clone();
     start_file_watcher(
         config.repo.clone(),
         pool.clone(),
         config.clone(),
-        move |_path| {
+        move |path| {
             let _ = watcher_app.emit("sync-update", ());
+            if let Some(client) = cloud_watcher.clone() {
+                let repo = repo_watcher.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(bytes) = tokio::fs::read(&path).await {
+                        if let Ok(rel) = path.strip_prefix(&repo) {
+                            let _ = client.push_file(&rel.to_string_lossy(), bytes).await;
+                        }
+                    }
+                });
+            }
         },
     )?;
 
@@ -118,6 +144,7 @@ async fn setup_app(app: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
     app.manage(Mutex::new(AppState {
         pool: pool.clone(),
         config: config.clone(),
+        cloud_client: cloud_client.clone(),
     }));
 
     // Catch up on any files that changed while the app was offline.
@@ -134,6 +161,28 @@ async fn setup_app(app: tauri::AppHandle) -> Result<(), Box<dyn std::error::Erro
         }
         let _ = startup_app.emit("sync-update", ());
     });
+
+    // Cloud startup sync + background periodic sync
+    if let Some(client) = cloud_client.clone() {
+        let repo = config.repo.clone();
+        let sync_interval: u64 = 300;
+        let bg_app = app.clone();
+        tokio::spawn(async move {
+            // Small delay so local startup sync completes first
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            let _ = client.sync(&repo).await;
+            let _ = bg_app.emit("cloud-sync-update", ());
+
+            let mut ticker =
+                tokio::time::interval(std::time::Duration::from_secs(sync_interval));
+            ticker.tick().await; // skip immediate first tick
+            loop {
+                ticker.tick().await;
+                let _ = client.sync(&repo).await;
+                let _ = bg_app.emit("cloud-sync-update", ());
+            }
+        });
+    }
 
     // Build system tray
     build_tray(&app)?;

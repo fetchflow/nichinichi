@@ -13,6 +13,7 @@ nichinichi-types  = { workspace = true }
 nichinichi-parser = { workspace = true }
 nichinichi-sync   = { workspace = true }
 nichinichi-ai     = { workspace = true }
+nichinichi-cloud  = { workspace = true }
 tauri         = { workspace = true }
 tauri-plugin-autostart = { workspace = true }
 tauri-plugin-dialog    = { workspace = true }

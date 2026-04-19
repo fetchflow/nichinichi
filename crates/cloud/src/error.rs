@@ -21,6 +21,9 @@ pub enum CloudError {
         remote_updated_at: String,
     },
 
+    #[error("io error: {0}")]
+    Io(String),
+
     #[error("cloud sync is not configured")]
     NotConfigured,
 }
