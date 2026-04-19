@@ -21,16 +21,16 @@ impl AiClient {
     fn chat_url(&self) -> String {
         let base = self.config.base_url.trim_end_matches('/');
         match self.config.provider {
-            AiProvider::Ollama    => format!("{}/v1/chat/completions", base),
-            AiProvider::Openwebui => format!("{}/api/chat/completions", base),
+            AiProvider::Ollama  => format!("{}/v1/chat/completions", base),
+            AiProvider::Litellm => format!("{}/v1/chat/completions", base),
         }
     }
 
     /// Fetch available model IDs, routing to the correct endpoint by provider.
     pub async fn list_models(&self) -> Result<Vec<String>, AiError> {
         match self.config.provider {
-            AiProvider::Ollama    => self.list_models_ollama().await,
-            AiProvider::Openwebui => self.list_models_openwebui().await,
+            AiProvider::Ollama  => self.list_models_ollama().await,
+            AiProvider::Litellm => self.list_models_litellm().await,
         }
     }
 
@@ -78,12 +78,12 @@ impl AiClient {
             .collect())
     }
 
-    /// Open WebUI: `/api/models` returning `data[].id`.
-    async fn list_models_openwebui(&self) -> Result<Vec<String>, AiError> {
+    /// LiteLLM: `/v1/models` returning OpenAI-standard `data[].id`.
+    async fn list_models_litellm(&self) -> Result<Vec<String>, AiError> {
         let base = self.config.base_url.trim_end_matches('/');
         let resp = self
             .client
-            .get(format!("{}/api/models", base))
+            .get(format!("{}/v1/models", base))
             .header("Authorization", format!("Bearer {}", self.config.api_key))
             .send()
             .await?;

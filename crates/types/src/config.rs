@@ -6,7 +6,7 @@ use std::path::PathBuf;
 pub enum AiProvider {
     #[default]
     Ollama,
-    Openwebui,
+    Litellm,
 }
 
 /// Configuration for the optional nichinichi-cloud sync backend.
