@@ -1,0 +1,23 @@
+{
+  "version": "0.3.0",
+  "notes": "See https://github.com/fetchflow/nichinichi/releases/tag/v0.3.0",
+  "pub_date": "2026-04-19T02:01:06Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "",
+      "url": "https://github.com/fetchflow/nichinichi/releases/download/v0.3.0/Nichinichi_aarch64.app.tar.gz"
+    },
+    "darwin-x86_64": {
+      "signature": "",
+      "url": "https://github.com/fetchflow/nichinichi/releases/download/v0.3.0/Nichinichi_x64.app.tar.gz"
+    },
+    "linux-x86_64": {
+      "signature": "",
+      "url": ""
+    },
+    "windows-x86_64": {
+      "signature": "",
+      "url": "https://github.com/fetchflow/nichinichi/releases/download/v0.3.0/Nichinichi_0.3.0_x64-setup.exe"
+    }
+  }
+}
