@@ -51,7 +51,10 @@ nichinichi/
 │   │                            #   entries, goals, playbooks, digests
 │   ├── sync/                    # SQLite writer + file watcher + rebuild
 │   │                            #   SyncTarget trait (Local impl only)
-│   └── ai/                      # FTS5 query builder + Claude SSE stream
+│   ├── ai/                      # FTS5 query builder + OpenAI-compat SSE stream
+│   │                            #   AiProvider: Ollama | Litellm
+│   └── cloud/                   # Phase 2 cloud sync client (HTTP)
+│                                #   manifest, merge conflict resolution
 ├── apps/
 │   ├── cli/                     # `nichinichi` binary — clap
 │   └── desktop/                 # Tauri v2 desktop app
@@ -64,7 +67,9 @@ nichinichi/
 │       ├── src/
 │       │   ├── App.tsx          # Root: section routing (no auth gate)
 │       │   ├── types/           # TypeScript types (Entry, Goal, Theme…)
-│       │   ├── hooks/           # useEntries, useGoals, useTheme, useOrg
+│       │   ├── hooks/           # useEntries, useGoals, useTheme, useOrg,
+│       │   │                    #   useAiTabs, useSyncStatus, useActiveModel,
+│       │   │                    #   useActivity, useFontSize, useTimezone
 │       │   ├── views/           # DashboardView, LogView, GoalsView,
 │       │   │                    #   PlaybooksView, ReportsView, SettingsView
 │       │   └── components/      # feed/, composer/, stats/, ai/, graphs/,
@@ -85,8 +90,11 @@ nichinichi/
 ```
 types  ←  parser  ←  sync  ←  ai
   ↑          ↑        ↑       ↑
-  └──────────┴────────┴───────┴── cli (binary)
-  └──────────┴────────┴───────┴── desktop/src-tauri (Tauri binary)
+  ↑                           ↑
+  └──────── cloud ─────────────┘
+  ↑          ↑        ↑       ↑       ↑
+  └──────────┴────────┴───────┴───────┴── cli (binary)
+  └──────────┴────────┴───────┴───────┴── desktop/src-tauri (Tauri binary)
 ```
 
 ---
@@ -99,6 +107,7 @@ cargo build
 cargo test
 cargo test -p nichinichi-parser          # parser unit tests
 cargo test -p nichinichi-sync            # sync + SQLite tests
+cargo test -p nichinichi-cloud           # cloud merge + manifest tests
 cargo run -p nichinichi-cli -- "text"    # run CLI in dev mode
 cargo install --path apps/cli        # install `nichinichi` globally
 
@@ -271,12 +280,20 @@ repo: ~/nichinichi
 editor: vim           # $EDITOR fallback
 
 ai:
-  base_url: https://api.anthropic.com
-  api_key: sk-ant-...          # entered via Settings UI, saved here
+  base_url: https://api.anthropic.com  # or Ollama / LiteLLM base URL
+  api_key: sk-ant-...                  # entered via Settings UI, saved here
   model: claude-sonnet-4-5
+  provider: litellm                    # "ollama" (default) | "litellm"
 
 # default org for entries with no @org tag and no project .nichinichi.yml
 default_org: personal
+
+# optional cloud sync (Phase 2 — disabled if absent)
+cloud:
+  base_url: https://sync.nichinichi.app
+  token: ""                            # exchanged from API key via authenticate()
+  last_synced_at: 0                    # unix timestamp for incremental sync
+  conflict_strategy: remote_wins       # remote_wins | local_wins | error
 
 # project-level .nichinichi.yml (in any project root)
 # project: api-refactor
@@ -541,7 +558,14 @@ SQLite. Does not require a full rebuild for single-file changes.
 - CLI: SSE chunks printed to stdout as they arrive
 - Desktop: Rust emits `ai-chunk` / `ai-done` Tauri events →
   frontend `listen()`s and appends to conversation
+- Multi-tab AI chat: `useAiTabs` hook routes SSE chunks to the correct
+  tab by tab ID; tabs support drag-reorder, unread indicators, per-tab
+  input preservation, and an overflow menu
+- Model picker integrated into AskPanel; active model stored in `settings`
+  table via `useActiveModel` hook
 - Queries use SQLite FTS5 (`MATCH` queries) to build context
+- AskPanel renders AI-returned fenced code blocks for entry/goal/playbook/
+  digest creation directly in the chat UI
 - `.quiet/` entries never included in AI context under any circumstances
 - Org filter applied to AI queries when an org is active
 
@@ -571,6 +595,13 @@ feature). Menu: Sync now, Quit. Left-click shows/focuses the window.
 `tauri-plugin-autostart` with `MacosLauncher::LaunchAgent`. Toggle in
 Settings UI (saved to `settings` table). Only functional in bundled
 builds. `bundle.active: false` in `tauri.conf.json` for dev.
+
+### In-app updates
+
+`tauri-plugin-updater` checks `https://fetchflow.github.io/nichinichi/latest.json`
+for new releases. Two Tauri commands: `check_for_update()` (returns version +
+notes if available) and `install_update()` (downloads and restarts). Toggle
+visible in SettingsView. Silent background check on app launch.
 
 ### Skeleton loading states
 
@@ -683,25 +714,56 @@ sqlx             = { version = "0.8", features = ["sqlite", "runtime-tokio",
 notify           = "6"
 notify-debouncer-mini = "0.4"
 
-# ai
+# ai + cloud
 reqwest          = { version = "0.12", features = ["json", "stream"] }
 futures          = "0.3"
+hex              = "0.4"
 
 # cli
 clap             = { version = "4",    features = ["derive"] }
 colored          = "2"
+dialoguer        = "0.11"
 
 # desktop/src-tauri
-tauri            = { version = "2",    features = ["tray-icon"] }
+tauri                  = { version = "2", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
-open             = "5"
-urlencoding      = "2"
+tauri-plugin-dialog    = "2"
+tauri-plugin-updater   = "2"
+open                   = "5"
+urlencoding            = "2"
 ```
 
 **Note:** `sqlx` with the `sqlite` feature replaces the previous
 `rusqlite` direct usage. Use `sqlx::SqlitePool` with
 `tokio::task::spawn_blocking` where blocking calls are unavoidable.
 Migrations live in `crates/sync/migrations/`.
+
+---
+
+## Cloud Sync (`crates/cloud`)
+
+Phase 2 infrastructure for optional server-backed sync. Not yet wired into
+Tauri commands — the crate exists as the client layer only.
+
+```rust
+// CloudClient HTTP methods
+client.authenticate(api_key)          // exchange API key → bearer token
+client.get_manifest(query)            // fetch remote manifest for diff
+client.push_entry(entry)              // upload a single entry
+client.push_entries(entries)          // batch upload
+client.get_entry(id)                  // fetch remote entry by ID
+client.delete_entry(id)
+// Same pattern for goals, playbooks, digests, ai-conversations
+
+// Conflict resolution
+merge_entry(&local, &remote, strategy)  // returns MergeOutcome
+diff_manifests(&local, &remote)         // returns (to_push, to_pull, to_delete)
+```
+
+`ConflictStrategy`: `RemoteWins` (default) | `LocalWins` | `Error`
+
+The cloud crate depends only on `types` — it has no dependency on `sync` or
+`parser`, keeping it independently testable.
 
 ---
 
@@ -712,12 +774,20 @@ repo: ~/nichinichi
 editor: vim          # $EDITOR fallback
 
 ai:
-  base_url: https://api.anthropic.com  # or Ollama, LiteLLM, Open WebUI
+  base_url: https://api.anthropic.com  # or Ollama / LiteLLM base URL
   api_key: ""                          # entered via Settings UI
   model: claude-sonnet-4-5
+  provider: litellm                    # "ollama" (default) | "litellm"
 
 default_org: personal                  # fallback when no @org and no
                                        # project .nichinichi.yml
+
+# cloud sync — omit this block to disable
+cloud:
+  base_url: https://sync.nichinichi.app
+  token: ""
+  last_synced_at: 0
+  conflict_strategy: remote_wins
 ```
 
 AI key is entered once in the Settings UI and written to this file.
@@ -769,3 +839,13 @@ desktop app always reads from the config file.
 - `.quiet/` entries are never indexed, never sent to AI, never synced
   under any circumstances — this is enforced in the file watcher and
   the sync rebuild, not just the UI
+- AI provider is an enum (`Ollama` | `Litellm`) stored in config;
+  Ollama tries `/v1/models` first, falls back to `/api/tags` for model listing
+- `crates/cloud` depends only on `types` — no dependency on `sync` or `parser`
+  so it can be tested and evolved independently
+- Cloud sync token is obtained by calling `authenticate(api_key)` on the
+  cloud server; the token (not the API key) is stored in config
+- In-app updates use `tauri-plugin-updater`; update endpoint is
+  `https://fetchflow.github.io/nichinichi/latest.json`
+- Multi-tab AI chat state lives entirely in `useAiTabs`; the Rust side is
+  unchanged — SSE events are routed client-side by tab ID
